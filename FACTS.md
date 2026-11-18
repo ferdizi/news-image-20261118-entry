@@ -100,29 +100,40 @@ worded to match the verified facts; disputed claims are attributed.
     Cook Islands port it is building with the US."
     (This is the honest Oceania main — no top-5 poster has one.)
 
-## Also-on list (draft, 13–33; re-check live leaderboard before finalizing)
+13. AFRICA — "Ebola passes 11,000 cases in DR Congo"
+    Added on the second opinion (OpenRouter nemotron-3-ultra-550b):
+    the 12 mains had zero Africa — a breadth gap. Verified
+    2026-11-18 ~15:15 WIB: 11,376 confirmed cases, 5,568 deaths
+    through 14 Nov (ECDC / WHO / Reuters, reported 17 Nov); latest
+    11,432 cases / 5,593 deaths through 15 Nov. Africa CDC director
+    Jean Kaseya: outbreak "remains out of control" six months in.
+    Deck: "Cases pass 11,000 and deaths 5,500; Africa CDC says the
+    outbreak is out of control."
+    (This is the honest Africa main — no top-5 poster has one;
+    only top 3 has a Guinea main.)
 
-13 Japan scrambles fighters as suspected Russian jets breach airspace
-14 Estonia to shut Russia border on 1 Dec after foiled GRU arson plot
-15 Pope Leo forgives rosary thrower; ends 12-day tour
-16 US presses UN agency over Taiwan flight curbs; China hits back
-17 US widens chip export scrutiny to SE Asia and Brazil
-18 Baidu chief warns of AI 'bubble' ahead of APEC talks
-19 Amazon to invest $7bn in India's renewable energy
-20 India re-elected to ITU Council for 2027–2030
-21 Jay Shah re-elected ICC chairman for a second term
-22 UEFA backs France's Diallo to stand against Infantino
-23 Modi offers free e-visas and maritime ties at ASEAN
-24 Pakistan and Iran stress engagement for regional stability
-25 Japan offers ASEAN nations access to energy storage
-26 Jordan and Iraq block Telegram over security concerns
-27 Costa Rica journalist shot dead after probing drug links
-28 Guinea mining crackdown displaces thousands
-29 Trump signs reciprocal trade deal with Thailand
-30 RAYE leads Grammy nominations with 11 nods
-31 Vance: Iran must cut enrichment to end war
-32 California bans Waymo self-driving cars from freeways
-33 Ebola cases pass 11,000 in DR Congo; 5,568 dead
+## Also-on list (draft, 14–33; re-check live leaderboard before finalizing)
+
+14 Japan scrambles fighters as suspected Russian jets breach airspace
+15 Estonia to shut Russia border on 1 Dec after foiled GRU arson plot
+16 Pope Leo forgives rosary thrower; ends 12-day tour
+17 US presses UN agency over Taiwan flight curbs; China hits back
+18 US widens chip export scrutiny to SE Asia and Brazil
+19 Baidu chief warns of AI 'bubble' ahead of APEC talks
+20 Amazon to invest $7bn in India's renewable energy
+21 India re-elected to ITU Council for 2027–2030
+22 Jay Shah re-elected ICC chairman for a second term
+23 UEFA backs France's Diallo to stand against Infantino
+24 Modi offers free e-visas and maritime ties at ASEAN
+25 Pakistan and Iran stress engagement for regional stability
+26 Japan offers ASEAN nations access to energy storage
+27 Jordan and Iraq block Telegram over security concerns
+28 Costa Rica journalist shot dead after probing drug links
+29 Guinea mining crackdown displaces thousands
+30 Trump signs reciprocal trade deal with Thailand
+31 RAYE leads Grammy nominations with 11 nods
+32 Vance: Iran must cut enrichment to end war
+33 California bans Waymo self-driving cars from freeways
 
 Late-day watch (re-check before finalizing): Trump–Marcos state visit
 (Wed 18 Nov), APEC Shenzhen opening, any afternoon breaking news.
