@@ -55,7 +55,7 @@ def main():
     check("footer sources", "Sources: Reuters, AP, AFP, BBC" in src)
 
     small = img.resize((300, 300), Image.LANCZOS)
-    thumb = os.path.join(HERE, "entry-300px.png")
+    thumb = "/tmp/ni18-300px.png"
     small.save(thumb)
     print(f"[info] 300px legibility render written to {thumb}")
 
