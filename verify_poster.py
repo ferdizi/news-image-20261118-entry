@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Shape-check the 18 November poster v2 against every hard cap in RULES.txt.
+"""Shape-check the 18 November poster v3 against every hard cap in RULES.txt.
 
 Checks the built entry.png next to this file: it is a whole PNG, exactly
 1024 by 1024 pixels, at most 1 MiB; the masthead names Wednesday
@@ -97,7 +97,7 @@ def main():
     check("two builds byte-identical", h1 == h2, h1[:12])
 
     small = img.resize((300, 300), Image.LANCZOS)
-    thumb = "/tmp/ni18-v2-300px.png"
+    thumb = "/tmp/ni18-v3-300px.png"
     small.save(thumb)
     print(f"[info] 300px legibility render written to {thumb}")
 
