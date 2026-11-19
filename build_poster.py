@@ -38,6 +38,15 @@ gradient setting, a large middle subject (~60% of the panel), a
 foreground overlap, and deterministic dot/star texture, so no panel
 reads as blank. A red "18 NOV" date badge is added to the masthead.
 
+v4 woodcut (engraving-style art pass, same session): v4 is the best
+poster yet but its art is still flat geometric shapes with no outlines,
+so it does not match the top 3's detailed illustration (the woodcut
+top 3 at 99.14% wins on bold outlines, hatching and stipple). This pass
+re-renders the same 13 scenes as woodcut/engraving: flat warm colour
+blocks, thick warm-black outlines on every major shape, diagonal hatch
+shading on skies/seas/grounds, stipple texture, and a thin dark border
+framing each art panel. Same 40 stories, facts, grid and layout.
+
 Draws a 1024x1024 page with Pillow. Deterministic.
 Run: python3 build_poster.py   (writes entry.png next to this file)
 """
@@ -451,189 +460,334 @@ def _figure(draw, x, y, s, col):
                   (x + int(0.22 * s), y)], fill=col)
 
 
+# ------------------------------------------------------- woodcut engine
+# Woodcut / engraving style: flat warm colour blocks, thick warm-black
+# outlines on every major shape, diagonal hatch shading, stipple
+# texture, and a thin dark border framing each art panel. All
+# deterministic: hatch is pure geometry, stipple uses the same _lcg
+# PRNG as the rest of the poster, so two builds stay byte-identical.
+WC_INK = (28, 22, 18)          # warm near-black for outlines
+WC_PAPER = (246, 234, 208)     # warm cream panel base
+WC_OCHRE = (204, 138, 44)
+WC_TEAL = (32, 110, 110)
+WC_SKY = (238, 214, 170)       # warm sky paper
+WC_SEA = (44, 96, 110)
+WC_SUN = (255, 196, 90)
+
+
+def wc_hatch(draw, x, y, w, h, col, spacing=6, angle=45, width=1):
+    """Diagonal hatch lines across a rectangle, clipped to it by
+    construction. angle 45 = down-right, -45 = down-left."""
+    x0, y0, x1, y1 = x, y, x + w, y + h
+    step = spacing * math.sqrt(2)
+    if angle == 45:
+        # lines y = x + c, c in [y0 - x1, y1 - x0]
+        c = y0 - x1
+        while c <= y1 - x0:
+            lo = max(x0, y0 - c)
+            hi = min(x1, y1 - c)
+            if lo <= hi:
+                draw.line([(lo, lo + c), (hi, hi + c)], fill=col, width=width)
+            c += step
+    else:
+        # lines y = -x + c, c in [x0 + y0, x1 + y1]
+        c = x0 + y0
+        while c <= x1 + y1:
+            lo = max(x0, c - y1)
+            hi = min(x1, c - y0)
+            if lo <= hi:
+                draw.line([(lo, c - lo), (hi, c - hi)], fill=col, width=width)
+            c += step
+
+
+def wc_xhatch(draw, x, y, w, h, col, spacing=7, width=1):
+    """Cross-hatch: both diagonal directions."""
+    wc_hatch(draw, x, y, w, h, col, spacing=spacing, angle=45, width=width)
+    wc_hatch(draw, x, y, w, h, col, spacing=spacing, angle=-45, width=width)
+
+
+def wc_stipple_poly(draw, poly, col, r, seed, step=5):
+    """Deterministic stipple dots inside a polygon (absolute coords)."""
+    xs = [p[0] for p in poly]
+    ys = [p[1] for p in poly]
+    rng = _lcg(seed)
+    yy = min(ys) + step // 2
+    row = 0
+    while yy <= max(ys):
+        xx = min(xs) + step // 2 + (row % 2) * (step // 2)
+        while xx <= max(xs):
+            if next(rng) < 0.55 and _inside(xx, yy, poly):
+                draw.ellipse([xx - r, yy - r, xx + r, yy + r], fill=col)
+            xx += step
+        yy += step
+        row += 1
+
+
+def wc_stipple_ellipse(draw, cx, cy, rx, ry, col, r, seed, step=5):
+    """Deterministic stipple dots inside an ellipse."""
+    rng = _lcg(seed)
+    yy = cy - ry + step // 2
+    row = 0
+    while yy <= cy + ry:
+        xx = cx - rx + step // 2 + (row % 2) * (step // 2)
+        while xx <= cx + rx:
+            if next(rng) < 0.55:
+                nx = (xx - cx) / rx
+                ny = (yy - cy) / ry
+                if nx * nx + ny * ny <= 1.0:
+                    draw.ellipse([xx - r, yy - r, xx + r, yy + r], fill=col)
+            xx += step
+        yy += step
+        row += 1
+
+
+def wc_border(draw, x, y, w, h, col=WC_INK, width=2):
+    """Thin dark border around an art panel — the woodcut block edge."""
+    draw.rectangle([x, y, x + w - 1, y + h - 1], outline=col, width=width)
+
+
 def paint(draw, n, x, y, w, h):
     """Vector scene per main. v4: every panel is a full 3-plane scene —
     gradient setting, large middle subject (~60% of the panel, cropped
     at edges), foreground overlap — plus deterministic texture so no
     panel reads as blank. Leads (1-3) get the tall art box; the rest
     get the short one. All original drawings."""
-    if n == 1:  # Shenzhen dusk: terminal glass, plane, handshake on carpet
-        sky(draw, x, y, w, h, (246, 178, 110), (122, 92, 150))
+    if n == 1:  # Shenzhen dusk, woodcut: flat warm sky, outlined plane
+        # flat warm dusk paper + hatch shading band across the top
+        draw.rectangle([x, y, x + w, y + h], fill=WC_SKY)
+        wc_hatch(draw, x, y, w, int(h * 0.30), (214, 178, 130), spacing=7,
+                 angle=45, width=1)
         # terminal glass: vertical mullions across the back
         for gx in range(0, w + 1, 26):
             draw.line([(x + gx, y), (x + gx, y + int(h * 0.42))],
-                      fill=(90, 70, 110), width=2)
+                      fill=WC_INK, width=2)
+        # sun: flat ochre disc, bold outline, short hatch rays
         draw.ellipse([x + int(w * 0.80), y + int(h * 0.06),
-                      x + int(w * 0.94), y + int(h * 0.34)], fill=(255, 214, 130))
-        # skyline, full width, denser, with lit windows
+                      x + int(w * 0.94), y + int(h * 0.34)],
+                     fill=WC_SUN, outline=WC_INK, width=2)
+        for rx in (-0.06, 0.0, 0.06):
+            draw.line([(x + int(w * (0.87 + rx)), y + int(h * 0.36)),
+                       (x + int(w * (0.87 + rx * 1.6)), y + int(h * 0.46))],
+                      fill=WC_INK, width=2)
+        # skyline, full width, denser, bold outlines + lit windows
         for bx, bw, bh in [(0.00, 0.09, 0.52), (0.10, 0.07, 0.68),
                            (0.18, 0.11, 0.46), (0.30, 0.08, 0.62),
                            (0.39, 0.10, 0.50), (0.50, 0.07, 0.70),
                            (0.58, 0.11, 0.55), (0.70, 0.08, 0.66),
                            (0.79, 0.09, 0.48), (0.89, 0.11, 0.60)]:
             draw.rectangle([x + int(w * bx), y + h - int(h * bh),
-                            x + int(w * (bx + bw)), y + h], fill=(52, 48, 74))
+                            x + int(w * (bx + bw)), y + h],
+                           fill=(52, 48, 74), outline=WC_INK, width=2)
         _dots(draw, x, y + int(h * 0.55), w, int(h * 0.45), (255, 214, 130),
               9, 1, 101, fill=0.5)
-        # plane silhouette (bigger) + escort jets overhead
+        # plane: white fuselage with BOLD outline + outlined wings/tail
         px, py = x + int(w * 0.24), y + int(h * 0.30)
-        draw.ellipse([px, py - 8, px + int(w * 0.50), py + 8], fill=(250, 250, 250))
+        draw.ellipse([px, py - 8, px + int(w * 0.50), py + 8],
+                     fill=(250, 250, 250), outline=WC_INK, width=3)
         draw.polygon([(px + int(w * 0.30), py - 6),
                       (px + int(w * 0.40), py - 26),
                       (px + int(w * 0.44), py - 26),
-                      (px + int(w * 0.38), py - 4)], fill=(250, 250, 250))
+                      (px + int(w * 0.38), py - 4)],
+                     fill=(250, 250, 250), outline=WC_INK)
         draw.polygon([(px + int(w * 0.06), py + 4),
                       (px + int(w * 0.16), py + 22),
                       (px + int(w * 0.20), py + 20),
-                      (px + int(w * 0.14), py + 2)], fill=(250, 250, 250))
+                      (px + int(w * 0.14), py + 2)],
+                     fill=(250, 250, 250), outline=WC_INK)
         draw.polygon([(px + int(w * 0.40), py - 4),
                       (px + int(w * 0.48), py - 12),
-                      (px + int(w * 0.48), py - 2)], fill=(250, 250, 250))
+                      (px + int(w * 0.48), py - 2)],
+                     fill=(250, 250, 250), outline=WC_INK)
         for jx, jy in [(0.10, 0.12), (0.24, 0.07)]:
             jpx, jpy = x + int(w * jx), y + int(h * jy)
             draw.polygon([(jpx, jpy - 4), (jpx + 16, jpy), (jpx, jpy + 4)],
-                         fill=(250, 250, 250))
+                         fill=(250, 250, 250), outline=WC_INK)
         # red carpet + gold edge + runway lights (foreground)
-        draw.rectangle([x, y + h - 7, x + w, y + h], fill=(176, 58, 46))
+        draw.rectangle([x, y + h - 7, x + w, y + h], fill=(176, 58, 46),
+                       outline=WC_INK, width=1)
         draw.rectangle([x, y + h - 9, x + w, y + h - 7], fill=(255, 214, 130))
         for lx in range(8, w, 22):
             draw.ellipse([x + lx - 2, y + h - 14, x + lx + 2, y + h - 10],
-                         fill=(255, 214, 130))
+                         fill=(255, 214, 130), outline=WC_INK)
         # two handshake figures on the carpet, centre
         fx = x + int(w * 0.44)
         _figure(draw, fx, y + h - 9, 26, (20, 20, 30))
         _figure(draw, fx + 34, y + h - 9, 26, (20, 20, 30))
         draw.ellipse([fx + 13, y + h - 26, fx + 21, y + h - 18],
-                     fill=(255, 214, 130))
-        # flags, bottom-left
+                     fill=(255, 214, 130), outline=WC_INK)
+        # flags, bottom-left, with thin outlines
         for i, kind in enumerate(["cn", "us", "ru"]):
-            _flag(draw, x + int(w * (0.04 + i * 0.11)), y + int(h * 0.72),
-                  int(w * 0.09), int(h * 0.16), kind)
-    elif n == 2:  # Gulf night: radar, drone swarm, interceptors, burst
-        sky(draw, x, y, w, h, (16, 28, 56), (44, 68, 104))
+            fx0 = x + int(w * (0.04 + i * 0.11))
+            fy0 = y + int(h * 0.72)
+            _flag(draw, fx0, fy0, int(w * 0.09), int(h * 0.16), kind)
+            draw.rectangle([fx0, fy0, fx0 + int(w * 0.09), fy0 + int(h * 0.16)],
+                           outline=WC_INK, width=1)
+    elif n == 2:  # Gulf night, woodcut: flat navy, outlined radar dish
+        # flat deep navy night + subtle hatch band at the top
+        draw.rectangle([x, y, x + w, y + h], fill=(16, 28, 56))
+        wc_hatch(draw, x, y, w, int(h * 0.22), (30, 48, 88), spacing=7,
+                 angle=-45, width=1)
         _stars(draw, x, y, w, int(h * 0.55), 26, 202)
-        # sea, bottom third, with wave lines
-        draw.rectangle([x, y + int(h * 0.68), x + w, y + h], fill=(24, 52, 84))
+        # sea, bottom third: flat teal + hatch waves + bold top edge
+        draw.rectangle([x, y + int(h * 0.68), x + w, y + h], fill=WC_SEA)
+        wc_hatch(draw, x, y + int(h * 0.70), w, int(h * 0.26), (24, 70, 86),
+                 spacing=6, angle=45, width=1)
+        draw.line([x, y + int(h * 0.68), x + w, y + int(h * 0.68)],
+                  fill=WC_INK, width=2)
         for wy in (0.74, 0.82, 0.90):
             for wx in range(0, w, 18):
                 draw.arc([x + wx, y + int(h * wy) - 3, x + wx + 16,
                           y + int(h * wy) + 3], 180, 360, fill=(120, 160, 200),
                          width=2)
-        # coastline silhouette, bottom
+        # coastline silhouette, bottom, with bold outline
         draw.polygon([(x, y + h), (x + int(w * 0.30), y + int(h * 0.72)),
                       (x + int(w * 0.55), y + int(h * 0.82)),
                       (x + w, y + int(h * 0.78)), (x + w, y + h)],
-                     fill=(16, 38, 66))
-        # radar dome, left, bigger
+                     fill=(16, 38, 66), outline=WC_INK)
+        # radar dish, left: solid light disc, bold outline, rib lines
         draw.ellipse([x + int(w * 0.04), y + int(h * 0.38),
                       x + int(w * 0.34), y + int(h * 0.80)],
-                     outline=(220, 225, 235), width=4)
+                     fill=(200, 205, 215), outline=WC_INK, width=2)
+        for ly, lx0, lx1 in [(0.50, 0.07, 0.31), (0.59, 0.05, 0.33),
+                             (0.68, 0.07, 0.31)]:
+            draw.line([x + int(w * lx0), y + int(h * ly),
+                       x + int(w * lx1), y + int(h * ly)], fill=WC_INK, width=1)
         draw.line([x + int(w * 0.19), y + int(h * 0.80),
-                   x + int(w * 0.19), y + h - 2], fill=(220, 225, 235), width=4)
-        # drone swarm: red dots + white diamonds
+                   x + int(w * 0.19), y + h - 2], fill=WC_INK, width=4)
+        # drone swarm: red dots + white diamonds, both outlined
         for cx, cy, r in [(0.46, 0.18, 6), (0.54, 0.28, 5), (0.42, 0.30, 4),
                           (0.60, 0.16, 5), (0.66, 0.30, 4), (0.50, 0.42, 4)]:
             draw.ellipse([x + int(w * cx) - r, y + int(h * cy) - r,
-                          x + int(w * cx) + r, y + int(h * cy) + r], fill=RED)
+                          x + int(w * cx) + r, y + int(h * cy) + r],
+                         fill=RED, outline=WC_INK, width=1)
         for cx, cy in [(0.74, 0.14), (0.84, 0.28), (0.72, 0.44), (0.90, 0.40)]:
             draw.polygon([(x + int(w * cx), y + int(h * (cy - 0.05))),
                           (x + int(w * (cx + 0.09)), y + int(h * cy)),
                           (x + int(w * cx), y + int(h * (cy + 0.05))),
                           (x + int(w * (cx - 0.09)), y + int(h * cy))],
-                         fill=(250, 250, 250))
+                         fill=(250, 250, 250), outline=WC_INK)
         # tracer lines
         draw.line([x + int(w * 0.55), y + int(h * 0.55),
                    x + int(w * 0.75), y + int(h * 0.42)], fill=(255, 214, 130), width=2)
         draw.line([x + int(w * 0.62), y + int(h * 0.62),
                    x + int(w * 0.82), y + int(h * 0.50)], fill=(255, 214, 130), width=2)
-        # explosion burst, top-right
+        # explosion burst, top-right: dark burst behind = outline
+        _burst(draw, x + int(w * 0.88), y + int(h * 0.14), 14, WC_INK)
         _burst(draw, x + int(w * 0.88), y + int(h * 0.14), 12, (232, 132, 42))
         _burst(draw, x + int(w * 0.88), y + int(h * 0.14), 6, (255, 214, 130))
-    elif n == 3:  # Voyager: dense stars, big Earth, probe, trajectory
+    elif n == 3:  # Voyager, woodcut: outlined Earth, hatched gold dish
         draw.rectangle([x, y, x + w, y + h], fill=(8, 10, 20))
         _stars(draw, x, y, w, h, 30, 303)
-        # Earth, bottom-left, bigger
+        # Earth, bottom-left, bigger: bold light outline + stipple land
         draw.ellipse([x + int(w * 0.00), y + int(h * 0.60),
-                      x + int(w * 0.26), y + int(h * 0.98)], fill=(52, 118, 196))
+                      x + int(w * 0.26), y + int(h * 0.98)],
+                     fill=(52, 118, 196), outline=(220, 230, 245), width=2)
         draw.ellipse([x + int(w * 0.05), y + int(h * 0.68),
-                      x + int(w * 0.13), y + int(h * 0.82)], fill=(86, 158, 92))
+                      x + int(w * 0.13), y + int(h * 0.82)],
+                     fill=(86, 158, 92), outline=(220, 230, 245), width=1)
         draw.ellipse([x + int(w * 0.14), y + int(h * 0.84),
-                      x + int(w * 0.20), y + int(h * 0.94)], fill=(86, 158, 92))
+                      x + int(w * 0.20), y + int(h * 0.94)],
+                     fill=(86, 158, 92), outline=(220, 230, 245), width=1)
         draw.arc([x + int(w * 0.02), y + int(h * 0.70), x + int(w * 0.20),
                   y + int(h * 0.92)], 200, 340, fill=(255, 255, 255), width=2)
-        # dotted trajectory Earth -> probe
+        # dotted trajectory Earth -> probe, over a faint gold path line
+        draw.line([x + int(w * 0.20), y + int(h * 0.78),
+                   x + int(w * 0.80), y + int(h * 0.28)],
+                  fill=(255, 214, 130), width=1)
         for t in range(0, 13):
             fx = 0.20 + t * 0.05
             fy = 0.78 - t * 0.042
             draw.ellipse([x + int(w * fx) - 2, y + int(h * fy) - 2,
                           x + int(w * fx) + 2, y + int(h * fy) + 2],
-                         fill=(255, 214, 130))
-        # probe: gold dish + body + boom, bigger
+                         fill=(255, 214, 130), outline=WC_INK, width=1)
+        # probe: FILLED gold dish, bold outline, hatch ribs inside
         px, py = x + int(w * 0.78), y + int(h * 0.48)
         draw.ellipse([px - 17, py - 17, px + 17, py + 17],
-                     outline=(255, 214, 130), width=3)
+                     fill=(255, 214, 130), outline=WC_INK, width=2)
+        for dy, half in [(-6, 14), (0, 15), (6, 14)]:
+            draw.line([(px - half, py + dy), (px + half, py + dy)],
+                      fill=WC_INK, width=1)
+        draw.line([(px, py - 14), (px, py + 14)], fill=WC_INK, width=1)
         draw.line([px, py, px - 26, py + 22], fill=(220, 225, 235), width=3)
-        draw.rectangle([px - 26, py + 20, px - 14, py + 28], fill=(200, 200, 200))
+        draw.rectangle([px - 26, py + 20, px - 14, py + 28],
+                       fill=(200, 200, 200), outline=WC_INK, width=1)
         draw.line([px + 8, py + 10, px + 30, py + 30], fill=(220, 225, 235), width=3)
-        draw.ellipse([px + 28, py + 28, px + 34, py + 34], fill=(255, 214, 130))
+        draw.ellipse([px + 28, py + 28, px + 34, py + 34],
+                     fill=(255, 214, 130), outline=WC_INK, width=1)
         cap = font(SANS_B, 11)
         draw.text((x + int(w * 0.28), y + int(h * 0.04)), "1 LIGHT-DAY",
                   font=cap, fill=(255, 214, 130))
         draw.text((x + int(w * 0.28), y + int(h * 0.16)), "25.9 BILLION KM",
                   font=cap, fill=(255, 255, 255))
-    elif n == 4:  # Russia drones: swarm, flak bursts, rooftops
-        sky(draw, x, y, w, h, (18, 24, 48), (52, 66, 96))
+    elif n == 4:  # Russia drones, woodcut: flat navy, outlined swarm
+        # flat deep navy night + subtle hatch band at the top
+        draw.rectangle([x, y, x + w, y + h], fill=(18, 24, 48))
+        wc_hatch(draw, x, y, w, int(h * 0.20), (32, 40, 72), spacing=7,
+                 angle=-45, width=1)
         _stars(draw, x, y, w, int(h * 0.55), 12, 404)
+        # drone dots (outlined) + interceptor diamonds (outlined)
         for cx, cy, r in [(0.12, 0.28, 5), (0.28, 0.20, 4), (0.44, 0.30, 5),
                           (0.60, 0.22, 4), (0.76, 0.30, 5), (0.88, 0.20, 4),
                           (0.36, 0.44, 4), (0.68, 0.46, 4)]:
             draw.ellipse([x + int(w * cx) - r, y + int(h * cy) - r,
-                          x + int(w * cx) + r, y + int(h * cy) + r], fill=RED)
+                          x + int(w * cx) + r, y + int(h * cy) + r],
+                         fill=RED, outline=WC_INK, width=1)
         for cx, cy in [(0.08, 0.55), (0.24, 0.50), (0.52, 0.56), (0.84, 0.52)]:
             draw.polygon([(x + int(w * cx), y + int(h * (cy - 0.06))),
                           (x + int(w * (cx + 0.08)), y + int(h * cy)),
                           (x + int(w * cx), y + int(h * (cy + 0.06))),
                           (x + int(w * (cx - 0.08)), y + int(h * cy))],
-                         fill=(250, 250, 250))
-        # flak bursts
+                         fill=(250, 250, 250), outline=WC_INK)
+        # flak bursts: dark burst behind = outline
+        _burst(draw, x + int(w * 0.30), y + int(h * 0.34), 10, WC_INK)
         _burst(draw, x + int(w * 0.30), y + int(h * 0.34), 8, (232, 132, 42))
+        _burst(draw, x + int(w * 0.78), y + int(h * 0.40), 9, WC_INK)
         _burst(draw, x + int(w * 0.78), y + int(h * 0.40), 7, (232, 132, 42))
-        # rooftop silhouette, full width bottom
+        # rooftop silhouette, full width bottom, bold outlines + lit windows
         draw.rectangle([x, y + int(h * 0.78), x + w, y + h], fill=(30, 30, 40))
         for bx, bw, bh in [(0.00, 0.16, 0.18), (0.18, 0.12, 0.26),
                            (0.32, 0.14, 0.16), (0.48, 0.12, 0.24),
                            (0.62, 0.14, 0.18), (0.78, 0.12, 0.26),
                            (0.90, 0.10, 0.18)]:
             draw.rectangle([x + int(w * bx), y + h - int(h * bh),
-                            x + int(w * (bx + bw)), y + h], fill=(20, 20, 28))
+                            x + int(w * (bx + bw)), y + h],
+                           fill=(20, 20, 28), outline=WC_INK, width=1)
+        _dots(draw, x, y + int(h * 0.80), w, int(h * 0.18), (255, 214, 130),
+              9, 1, 405, fill=0.4)
         draw.line([x + int(w * 0.30), y + int(h * 0.50),
                    x + int(w * 0.52), y + int(h * 0.34)], fill=(255, 214, 130), width=2)
-    elif n == 5:  # Fed: building + chart, full
-        sky(draw, x, y, w, h, (232, 238, 225), (210, 220, 200))
+    elif n == 5:  # Fed, woodcut: flat warm paper, outlined bank + chart
+        # flat warm paper + subtle hatch band at the top
+        draw.rectangle([x, y, x + w, y + h], fill=WC_PAPER)
+        wc_hatch(draw, x, y, w, int(h * 0.18), (224, 210, 182), spacing=7,
+                 angle=45, width=1)
         # chart grid, right half
         for gx in range(int(w * 0.54), w, 12):
             draw.line([(x + gx, y + 4), (x + gx, y + h - 4)],
                       fill=(200, 205, 190), width=1)
-        # building, left
+        # building, left: flat stone, bold outlines on every part
         draw.rectangle([x + int(w * 0.06), y + int(h * 0.52),
-                        x + int(w * 0.48), y + int(h * 0.60)], fill=(120, 115, 105))
+                        x + int(w * 0.48), y + int(h * 0.60)],
+                       fill=(120, 115, 105), outline=WC_INK, width=2)
         draw.rectangle([x + int(w * 0.04), y + int(h * 0.60),
-                        x + int(w * 0.50), y + h], fill=(200, 195, 180))
+                        x + int(w * 0.50), y + h],
+                       fill=(200, 195, 180), outline=WC_INK, width=2)
         for cx in (0.09, 0.17, 0.25, 0.33, 0.41):
             draw.rectangle([x + int(w * cx), y + int(h * 0.38),
                             x + int(w * (cx + 0.03)), y + int(h * 0.60)],
-                           fill=(120, 115, 105))
+                           fill=(120, 115, 105), outline=WC_INK, width=1)
         draw.polygon([(x + int(w * 0.02), y + int(h * 0.38)),
                       (x + int(w * 0.27), y + int(h * 0.12)),
-                      (x + int(w * 0.52), y + int(h * 0.38))], fill=(150, 145, 135))
+                      (x + int(w * 0.52), y + int(h * 0.38))],
+                     fill=(150, 145, 135), outline=WC_INK)
         _dots(draw, x + int(w * 0.06), y + int(h * 0.64), int(w * 0.42),
               int(h * 0.30), (90, 85, 75), 7, 1, 505, fill=0.6)
-        # chart bars + falling red line, right
+        # chart bars + falling red line, right: bars get bold outlines
         for bx, bh in [(0.56, 0.20), (0.64, 0.32), (0.72, 0.26),
                        (0.80, 0.42), (0.88, 0.36)]:
             draw.rectangle([x + int(w * bx), y + int(h * (0.92 - bh)),
                             x + int(w * (bx + 0.06)), y + int(h * 0.92)],
-                           fill=(31, 78, 121))
+                           fill=(31, 78, 121), outline=WC_INK, width=1)
         pts = [(x + int(w * 0.56), y + int(h * 0.22)),
                (x + int(w * 0.68), y + int(h * 0.36)),
                (x + int(w * 0.80), y + int(h * 0.30)),
@@ -641,81 +795,110 @@ def paint(draw, n, x, y, w, h):
         draw.line(pts, fill=RED, width=3)
         draw.polygon([(x + int(w * 0.94), y + int(h * 0.52)),
                       (x + int(w * 0.86), y + int(h * 0.50)),
-                      (x + int(w * 0.94), y + int(h * 0.42))], fill=RED)
+                      (x + int(w * 0.94), y + int(h * 0.42))],
+                     fill=RED, outline=WC_INK)
         cap = font(SANS_B, 10)
         draw.text((x + int(w * 0.54), y + int(h * 0.04)), "DOW -1.1%",
                   font=cap, fill=RED)
-    elif n == 6:  # Cyclone Akvan: spiral, sea, coast, palm
-        sky(draw, x, y, w, h, (170, 190, 215), (215, 225, 230))
-        # rain streaks across the whole panel
+    elif n == 6:  # Cyclone Akvan, woodcut: bold spiral, hatched sea
+        # flat pale sky + hatch band at the top
+        draw.rectangle([x, y, x + w, y + h], fill=(215, 225, 230))
+        wc_hatch(draw, x, y, w, int(h * 0.18), (190, 205, 215), spacing=7,
+                 angle=45, width=1)
+        # rain streaks across the whole panel, dark engraving lines
         for dx in (0.06, 0.16, 0.26, 0.36, 0.46, 0.56, 0.66, 0.76, 0.86):
             draw.line([x + int(w * dx), y + int(h * 0.10),
                        x + int(w * (dx - 0.03)), y + int(h * 0.30)],
-                      fill=(92, 162, 212), width=2)
-        # spiral, centre-left, bigger
+                      fill=(60, 90, 120), width=2)
+        # spiral, centre-left: bold ink rings, filled centre
         cx, cy = x + int(w * 0.36), y + int(h * 0.52)
-        for rr, col in [(0.40, (200, 205, 210)), (0.30, (150, 165, 180)),
-                        (0.20, (110, 130, 150)), (0.10, (70, 95, 120))]:
+        for rr in (0.40, 0.30, 0.20, 0.10):
             r = int(min(w, h) * rr)
-            draw.ellipse([cx - r, cy - r, cx + r, cy + r], outline=col, width=3)
-        draw.ellipse([cx - 4, cy - 4, cx + 4, cy + 4], fill=NAVY)
-        # sea, bottom
+            draw.ellipse([cx - r, cy - r, cx + r, cy + r],
+                         outline=WC_INK, width=3)
+        draw.ellipse([cx - 4, cy - 4, cx + 4, cy + 4],
+                     fill=NAVY, outline=WC_INK, width=1)
+        # sea, bottom: flat teal + hatch waves + bold top edge
         draw.rectangle([x, y + int(h * 0.76), x + w, y + h], fill=(44, 110, 140))
+        wc_hatch(draw, x, y + int(h * 0.78), w, int(h * 0.20), (24, 80, 110),
+                 spacing=6, angle=-45, width=1)
+        draw.line([x, y + int(h * 0.76), x + w, y + int(h * 0.76)],
+                  fill=WC_INK, width=2)
         for wx in range(0, w, 14):
             draw.arc([x + wx, y + int(h * 0.82) - 2, x + wx + 12,
                       y + int(h * 0.82) + 2], 180, 360, fill=(180, 220, 235),
                      width=1)
-        # coast + palm, right
+        # coast + palm, right, with bold outline
         draw.rectangle([x + int(w * 0.82), y + int(h * 0.60),
-                        x + w, y + int(h * 0.76)], fill=(62, 172, 82))
+                        x + w, y + int(h * 0.76)],
+                       fill=(62, 172, 82), outline=WC_INK, width=2)
         _palm(draw, x + int(w * 0.90), y + int(h * 0.62), 16, (30, 90, 40))
         # speed chip, top-left
         cap = font(SANS_B, 10)
         draw.rectangle([x + 3, y + 3, x + 62, y + 17], fill=(255, 255, 255),
                        outline=RED)
         draw.text((x + 6, y + 5), "145 KM/H", font=cap, fill=RED)
-    elif n == 7:  # El Obeid: desert, smoke column, drone, ruins
-        sky(draw, x, y, w, h, (238, 206, 150), (220, 180, 120))
+    elif n == 7:  # El Obeid, woodcut: flat sand, outlined smoke + ruins
+        # flat warm sand + hatch band at the top
+        draw.rectangle([x, y, x + w, y + h], fill=(238, 206, 150))
+        wc_hatch(draw, x, y, w, int(h * 0.18), (220, 182, 122), spacing=7,
+                 angle=45, width=1)
+        # sun: flat ochre disc, bold outline
         draw.ellipse([x + int(w * 0.80) - 8, y + int(h * 0.16) - 8,
                       x + int(w * 0.80) + 8, y + int(h * 0.16) + 8],
-                     fill=(255, 220, 130))
-        # ground, bottom 38%, layered dune band
+                     fill=WC_SUN, outline=WC_INK, width=2)
+        # ground, bottom 38%: flat sand + hatch dune shading + bold top edge
         draw.rectangle([x, y + int(h * 0.62), x + w, y + h], fill=(196, 152, 96))
         draw.rectangle([x, y + int(h * 0.62), x + w, y + int(h * 0.72)],
                        fill=(212, 172, 116))
-        # smoke column, centre, slimmer puffs so they read as a column
+        wc_hatch(draw, x, y + int(h * 0.74), w, int(h * 0.24), (172, 128, 76),
+                 spacing=6, angle=-45, width=1)
+        draw.line([x, y + int(h * 0.62), x + w, y + int(h * 0.62)],
+                  fill=WC_INK, width=2)
+        # smoke column, centre: grey puffs with bold outlines
         for cx, cy, r in [(0.40, 0.55, 0.07), (0.46, 0.42, 0.055),
                           (0.41, 0.30, 0.045), (0.47, 0.18, 0.035)]:
             rx, ry = int(w * r), int(w * r)
             draw.ellipse([x + int(w * cx) - rx, y + int(h * cy) - ry,
                           x + int(w * cx) + rx, y + int(h * cy) + ry],
-                         fill=(110, 110, 110))
-        # drone, right, bigger + shadow on the ground
+                         fill=(110, 110, 110), outline=WC_INK, width=1)
+        # drone, right, bigger + shadow on the ground, both outlined
         draw.ellipse([x + int(w * 0.70) - 6, y + int(h * 0.30) - 6,
                       x + int(w * 0.70) + 6, y + int(h * 0.30) + 6],
-                     fill=(90, 90, 90))
+                     fill=(90, 90, 90), outline=WC_INK, width=1)
         draw.polygon([(x + int(w * 0.66), y + int(h * 0.26)),
                       (x + int(w * 0.76), y + int(h * 0.30)),
-                      (x + int(w * 0.66), y + int(h * 0.34))], fill=(60, 60, 60))
+                      (x + int(w * 0.66), y + int(h * 0.34))],
+                     fill=(60, 60, 60), outline=WC_INK)
         draw.ellipse([x + int(w * 0.66), y + int(h * 0.64),
-                      x + int(w * 0.74), y + int(h * 0.68)], fill=(150, 115, 70))
-        # ruins, bottom
+                      x + int(w * 0.74), y + int(h * 0.68)],
+                     fill=(150, 115, 70), outline=WC_INK, width=1)
+        # ruins, bottom, with bold outlines
         draw.rectangle([x + int(w * 0.06), y + int(h * 0.74),
-                        x + int(w * 0.24), y + h], fill=(120, 90, 60))
+                        x + int(w * 0.24), y + h],
+                       fill=(120, 90, 60), outline=WC_INK, width=2)
         draw.rectangle([x + int(w * 0.80), y + int(h * 0.80),
-                        x + int(w * 0.94), y + h], fill=(120, 90, 60))
-    elif n == 8:  # EU loan: navy field, gold star ring, big euro disc
+                        x + int(w * 0.94), y + h],
+                       fill=(120, 90, 60), outline=WC_INK, width=2)
+    elif n == 8:  # EU loan, woodcut: navy field, gold ring + outlined disc
         draw.rectangle([x, y, x + w, y + h], fill=NAVY)
         _dots(draw, x, y, w, h, (60, 80, 130), 10, 1, 808, fill=0.5)
-        # star ring, centre-left
+        # subtle cross-hatch band at the bottom for engraving texture
+        wc_hatch(draw, x, y + int(h * 0.82), w, int(h * 0.18), (40, 70, 120),
+                 spacing=7, angle=-45, width=1)
+        # star ring, centre-left: gold stars on a thin gold ring circle
         cx, cy = x + int(w * 0.30), y + int(h * 0.50)
+        draw.ellipse([cx - 26, cy - 26, cx + 26, cy + 26],
+                     outline=(250, 212, 62), width=1)
         for k in range(12):
             ang = math.radians(k * 30 - 90)
             sx = cx + math.cos(ang) * 26
             sy = cy + math.sin(ang) * 26
-            draw.ellipse([sx - 3, sy - 3, sx + 3, sy + 3], fill=(250, 212, 62))
-        # gold disc with the figure
-        draw.ellipse([cx - 18, cy - 18, cx + 18, cy + 18], fill=(250, 212, 62))
+            draw.ellipse([sx - 3, sy - 3, sx + 3, sy + 3],
+                         fill=(250, 212, 62), outline=WC_INK, width=1)
+        # gold disc with the figure: bold dark outline
+        draw.ellipse([cx - 18, cy - 18, cx + 18, cy + 18],
+                     fill=(250, 212, 62), outline=WC_INK, width=2)
         lab = font(SERIF_B, 10)
         tw = draw.textlength("\u20ac45bn", font=lab)
         draw.text((cx - tw / 2, cy - 7), "\u20ac45bn", font=lab, fill=NAVY)
@@ -729,95 +912,133 @@ def paint(draw, n, x, y, w, h):
                   font=cap, fill=(250, 212, 62))
         draw.rectangle([x + int(w * 0.58), y + int(h * 0.78),
                         x + int(w * 0.96), y + int(h * 0.84)],
-                       fill=(250, 212, 62))
-    elif n == 9:  # UK inflation: basket, rising bars, red trend
-        sky(draw, x, y, w, h, (238, 232, 220), (222, 210, 190))
-        # shelf line, bottom
+                       fill=(250, 212, 62), outline=WC_INK, width=1)
+    elif n == 9:  # UK inflation, woodcut: outlined basket + bars
+        # flat warm paper + hatch band at the top
+        draw.rectangle([x, y, x + w, y + h], fill=WC_PAPER)
+        wc_hatch(draw, x, y, w, int(h * 0.16), (224, 210, 182), spacing=7,
+                 angle=45, width=1)
+        # shelf line, bottom, with bold top edge
         draw.rectangle([x, y + int(h * 0.90), x + w, y + h], fill=(190, 175, 150))
-        # basket, left, bigger, with goods
+        draw.line([x, y + int(h * 0.90), x + w, y + int(h * 0.90)],
+                  fill=WC_INK, width=2)
+        # basket, left, bigger: bold outline + woven texture + goods
         draw.polygon([(x + int(w * 0.08), y + int(h * 0.50)),
                       (x + int(w * 0.40), y + int(h * 0.50)),
                       (x + int(w * 0.36), y + int(h * 0.90)),
-                      (x + int(w * 0.12), y + int(h * 0.90))], fill=(150, 105, 60))
+                      (x + int(w * 0.12), y + int(h * 0.90))],
+                     fill=(150, 105, 60), outline=WC_INK, width=2)
+        draw.line([x + int(w * 0.095), y + int(h * 0.62),
+                   x + int(w * 0.385), y + int(h * 0.62)], fill=(100, 70, 40),
+                  width=1)
+        draw.line([x + int(w * 0.107), y + int(h * 0.74),
+                   x + int(w * 0.373), y + int(h * 0.74)], fill=(100, 70, 40),
+                  width=1)
         draw.arc([x + int(w * 0.16), y + int(h * 0.26),
                   x + int(w * 0.32), y + int(h * 0.56)], 180, 360, fill=INK, width=3)
         for gx, gy in [(0.14, 0.44), (0.22, 0.40), (0.30, 0.44),
                        (0.18, 0.48), (0.28, 0.48)]:
             draw.ellipse([x + int(w * gx) - 4, y + int(h * gy) - 4,
                           x + int(w * gx) + 4, y + int(h * gy) + 4],
-                         fill=(200, 80, 60))
-        # bars, right, taller
+                         fill=(200, 80, 60), outline=WC_INK, width=1)
+        # bars, right, taller, with bold outlines
         for bx, bh in [(0.48, 0.22), (0.58, 0.34), (0.68, 0.48),
                        (0.78, 0.62), (0.88, 0.74)]:
             draw.rectangle([x + int(w * bx), y + int(h * (0.90 - bh)),
                             x + int(w * (bx + 0.07)), y + int(h * 0.90)],
-                           fill=(31, 78, 121))
-        # red trend arrow across the bars
+                           fill=(31, 78, 121), outline=WC_INK, width=1)
+        # red trend arrow across the bars, outlined head
         draw.line([(x + int(w * 0.46), y + int(h * 0.62)),
                    (x + int(w * 0.94), y + int(h * 0.14))], fill=RED, width=3)
         draw.polygon([(x + int(w * 0.94), y + int(h * 0.14)),
                       (x + int(w * 0.86), y + int(h * 0.14)),
-                      (x + int(w * 0.94), y + int(h * 0.26))], fill=RED)
+                      (x + int(w * 0.94), y + int(h * 0.26))],
+                     fill=RED, outline=WC_INK)
         cap = font(SANS_B, 11)
         draw.text((x + 4, y + 3), "3.6%", font=cap, fill=RED)
-    elif n == 10:  # Gaza: tank, dust, smoke, red line
-        sky(draw, x, y, w, h, (220, 205, 180), (200, 185, 160))
-        # dust cloud behind the tank
+    elif n == 10:  # Gaza, woodcut: outlined tank, hatched ground
+        # flat warm dust + hatch band at the top
+        draw.rectangle([x, y, x + w, y + h], fill=(220, 205, 180))
+        wc_hatch(draw, x, y, w, int(h * 0.18), (200, 182, 152), spacing=7,
+                 angle=45, width=1)
+        # dust cloud behind the tank: tan puffs with bold outlines
         for cx, cy, r in [(0.30, 0.55, 0.10), (0.38, 0.48, 0.08),
                           (0.22, 0.48, 0.07)]:
             rx, ry = int(w * r), int(w * r)
             draw.ellipse([x + int(w * cx) - rx, y + int(h * cy) - ry,
                           x + int(w * cx) + rx, y + int(h * cy) + ry],
-                         fill=(190, 170, 140))
-        # ground, bottom 34%
+                         fill=(190, 170, 140), outline=WC_INK, width=1)
+        # ground, bottom 34%: flat sand + hatch + bold top edge
         draw.rectangle([x, y + int(h * 0.66), x + w, y + h], fill=(172, 148, 108))
-        # tank, bigger, centre-left
+        wc_hatch(draw, x, y + int(h * 0.68), w, int(h * 0.30), (150, 126, 88),
+                 spacing=6, angle=-45, width=1)
+        draw.line([x, y + int(h * 0.66), x + w, y + int(h * 0.66)],
+                  fill=WC_INK, width=2)
+        # tank, bigger, centre-left: bold outlines on body + turret
         draw.rectangle([x + int(w * 0.10), y + int(h * 0.52),
-                        x + int(w * 0.56), y + int(h * 0.70)], fill=(74, 84, 66))
+                        x + int(w * 0.56), y + int(h * 0.70)],
+                       fill=(74, 84, 66), outline=WC_INK, width=2)
         draw.rectangle([x + int(w * 0.18), y + int(h * 0.36),
-                        x + int(w * 0.44), y + int(h * 0.52)], fill=(74, 84, 66))
+                        x + int(w * 0.44), y + int(h * 0.52)],
+                       fill=(74, 84, 66), outline=WC_INK, width=2)
+        # barrel: dark line behind = outline, green line on top
+        draw.line([x + int(w * 0.44), y + int(h * 0.42),
+                   x + int(w * 0.74), y + int(h * 0.36)], fill=WC_INK, width=7)
         draw.line([x + int(w * 0.44), y + int(h * 0.42),
                    x + int(w * 0.74), y + int(h * 0.36)], fill=(74, 84, 66), width=5)
         for wx in (0.14, 0.24, 0.34, 0.44, 0.52):
             draw.ellipse([x + int(w * wx) - 4, y + int(h * 0.66) - 4,
                           x + int(w * wx) + 4, y + int(h * 0.66) + 4],
-                         fill=(40, 40, 40))
-        # smoke, right, smaller and clear of the barrel tip
+                         fill=(40, 40, 40), outline=WC_INK, width=1)
+        # smoke, right, smaller and clear of the barrel tip, outlined
         for cx, cy, r in [(0.88, 0.22, 0.05), (0.92, 0.14, 0.035),
                           (0.84, 0.12, 0.03)]:
             rx, ry = int(w * r), int(w * r)
             draw.ellipse([x + int(w * cx) - rx, y + int(h * cy) - ry,
                           x + int(w * cx) + rx, y + int(h * cy) + ry],
-                         fill=(110, 110, 110))
+                         fill=(110, 110, 110), outline=WC_INK, width=1)
         # red dashed line, bottom-right
         draw.line([x + int(w * 0.60), y + int(h * 0.82),
                    x + int(w * 0.96), y + int(h * 0.82)], fill=RED, width=2)
         for dx in (0.64, 0.72, 0.80, 0.88):
             draw.line([x + int(w * dx), y + int(h * 0.82),
                        x + int(w * dx), y + int(h * 0.90)], fill=RED, width=2)
-    elif n == 11:  # Jeffries: navy field, white capitol, ballot card
+    elif n == 11:  # Jeffries, woodcut: outlined capitol + framed ballot
         draw.rectangle([x, y, x + w, y + h], fill=NAVY)
         _dots(draw, x, y, w, h, (60, 80, 130), 10, 1, 811, fill=0.5)
-        # capitol dome, centre-left, large
+        # subtle cross-hatch band at the bottom
+        wc_hatch(draw, x, y + int(h * 0.86), w, int(h * 0.14), (40, 70, 120),
+                 spacing=7, angle=-45, width=1)
+        # capitol dome, centre-left, large: bold outlines + rib lines
         draw.rectangle([x + int(w * 0.06), y + int(h * 0.76),
-                        x + int(w * 0.44), y + h], fill=(220, 218, 205))
+                        x + int(w * 0.44), y + h],
+                       fill=(220, 218, 205), outline=WC_INK, width=2)
         draw.ellipse([x + int(w * 0.12), y + int(h * 0.28),
-                      x + int(w * 0.38), y + int(h * 0.80)], fill=(220, 218, 205))
+                      x + int(w * 0.38), y + int(h * 0.80)],
+                     fill=(220, 218, 205), outline=WC_INK, width=2)
+        for rx in (0.18, 0.25, 0.32):
+            draw.line([x + int(w * rx), y + int(h * 0.45),
+                       x + int(w * rx), y + int(h * 0.70)], fill=WC_INK, width=1)
         draw.rectangle([x + int(w * 0.22), y + int(h * 0.12),
-                        x + int(w * 0.28), y + int(h * 0.32)], fill=(220, 218, 205))
+                        x + int(w * 0.28), y + int(h * 0.32)],
+                       fill=(220, 218, 205), outline=WC_INK, width=1)
         draw.ellipse([x + int(w * 0.23), y + int(h * 0.08),
-                      x + int(w * 0.27), y + int(h * 0.16)], fill=(250, 212, 62))
+                      x + int(w * 0.27), y + int(h * 0.16)],
+                     fill=(250, 212, 62), outline=WC_INK, width=1)
         draw.line([x + int(w * 0.25), y + int(h * 0.08),
                    x + int(w * 0.25), y + int(h * 0.02)], fill=(250, 212, 62),
                   width=2)
         for cx in (0.10, 0.18, 0.26, 0.34):
             draw.rectangle([x + int(w * cx), y + int(h * 0.60),
                             x + int(w * (cx + 0.04)), y + int(h * 0.76)],
-                           fill=(200, 195, 180))
-        # ballot card, right
+                           fill=(200, 195, 180), outline=WC_INK, width=1)
+        # ballot card, right: bold dark outline + thin gold inner frame
         draw.rectangle([x + int(w * 0.52), y + int(h * 0.18),
                         x + int(w * 0.96), y + int(h * 0.86)],
-                       fill=(255, 255, 255), outline=(250, 212, 62), width=2)
+                       fill=(255, 255, 255), outline=WC_INK, width=2)
+        draw.rectangle([x + int(w * 0.52) + 3, y + int(h * 0.18) + 3,
+                        x + int(w * 0.96) - 3, y + int(h * 0.86) - 3],
+                       outline=(250, 212, 62), width=1)
         lab = font(SERIF_B, 15)
         tw = draw.textlength("251\u201311", font=lab)
         draw.text((x + int(w * 0.74) - tw / 2, y + int(h * 0.26)), "251\u201311",
@@ -829,33 +1050,40 @@ def paint(draw, n, x, y, w, h):
         draw.line([(x + int(w * 0.58), y + int(h * 0.72)),
                    (x + int(w * 0.63), y + int(h * 0.78)),
                    (x + int(w * 0.72), y + int(h * 0.64))],
-                  fill=(178, 140, 40), width=2)
-    elif n == 12:  # GTA VI: sunset, skyline, palms, controller, VI
-        sky(draw, x, y, w, h, (48, 32, 88), (200, 90, 130))
+                  fill=(178, 140, 40), width=3)
+    elif n == 12:  # GTA VI, woodcut: flat purple sunset, outlined controller
+        # flat warm purple sunset + hatch band at the top
+        draw.rectangle([x, y, x + w, y + h], fill=(120, 60, 110))
+        wc_hatch(draw, x, y, w, int(h * 0.20), (90, 45, 85), spacing=7,
+                 angle=-45, width=1)
         _stars(draw, x, y, w, int(h * 0.45), 10, 812)
-        # sun disc, top-left
+        # sun disc, top-left: flat orange, bold outline, short rays
         draw.ellipse([x + int(w * 0.10) - 8, y + int(h * 0.20) - 8,
                       x + int(w * 0.10) + 8, y + int(h * 0.20) + 8],
-                     fill=(255, 160, 90))
-        # skyline, bottom, with lit windows
+                     fill=(255, 160, 90), outline=WC_INK, width=2)
+        # skyline, bottom, with bold outlines + lit windows
         for bx, bw, bh in [(0.00, 0.12, 0.22), (0.14, 0.09, 0.30),
                            (0.25, 0.11, 0.20), (0.38, 0.09, 0.28),
                            (0.49, 0.11, 0.22), (0.62, 0.09, 0.30),
                            (0.73, 0.11, 0.20), (0.86, 0.14, 0.26)]:
             draw.rectangle([x + int(w * bx), y + h - int(h * bh),
-                            x + int(w * (bx + bw)), y + h], fill=(30, 20, 50))
+                            x + int(w * (bx + bw)), y + h],
+                           fill=(30, 20, 50), outline=WC_INK, width=1)
         _dots(draw, x, y + int(h * 0.72), w, int(h * 0.28), (255, 214, 130),
               8, 1, 813, fill=0.5)
         # palms at the edges
         _palm(draw, x + int(w * 0.06), y + h - 2, 18, (20, 40, 30))
         _palm(draw, x + int(w * 0.94), y + h - 2, 18, (20, 40, 30))
-        # controller, centre, large
+        # controller, centre, large: bold outline + outlined buttons
         draw.ellipse([x + int(w * 0.24), y + int(h * 0.30),
-                      x + int(w * 0.76), y + int(h * 0.92)], fill=(24, 16, 44))
+                      x + int(w * 0.76), y + int(h * 0.92)],
+                     fill=(24, 16, 44), outline=WC_INK, width=2)
         draw.ellipse([x + int(w * 0.32), y + int(h * 0.48),
-                      x + int(w * 0.40), y + int(h * 0.62)], fill=(255, 120, 180))
+                      x + int(w * 0.40), y + int(h * 0.62)],
+                     fill=(255, 120, 180), outline=WC_INK, width=1)
         draw.ellipse([x + int(w * 0.60), y + int(h * 0.48),
-                      x + int(w * 0.68), y + int(h * 0.62)], fill=(255, 120, 180))
+                      x + int(w * 0.68), y + int(h * 0.62)],
+                     fill=(255, 120, 180), outline=WC_INK, width=1)
         draw.line([x + int(w * 0.36), y + int(h * 0.68),
                    x + int(w * 0.64), y + int(h * 0.68)], fill=(255, 120, 180),
                   width=2)
@@ -863,28 +1091,39 @@ def paint(draw, n, x, y, w, h):
         tw = draw.textlength("VI", font=lab)
         draw.text((x + (w - tw) / 2, y + int(h * 0.30)), "VI", font=lab,
                   fill=(255, 214, 130))
-    else:  # 13 Bangladesh: factory, smoke, crowd
-        sky(draw, x, y, w, h, (210, 220, 225), (235, 230, 215))
-        # factory, left, bigger, with lit windows
+    else:  # 13 Bangladesh, woodcut: outlined factory + crowd
+        # flat pale sky + hatch band at the top
+        draw.rectangle([x, y, x + w, y + h], fill=(222, 226, 222))
+        wc_hatch(draw, x, y, w, int(h * 0.16), (200, 206, 200), spacing=7,
+                 angle=45, width=1)
+        # factory, left, bigger: bold outlines + lit windows
         draw.rectangle([x + int(w * 0.06), y + int(h * 0.38),
-                        x + int(w * 0.46), y + int(h * 0.78)], fill=(120, 90, 70))
+                        x + int(w * 0.46), y + int(h * 0.78)],
+                       fill=(120, 90, 70), outline=WC_INK, width=2)
         draw.polygon([(x + int(w * 0.06), y + int(h * 0.38)),
                       (x + int(w * 0.16), y + int(h * 0.24)),
-                      (x + int(w * 0.26), y + int(h * 0.38))], fill=(120, 90, 70))
+                      (x + int(w * 0.26), y + int(h * 0.38))],
+                     fill=(120, 90, 70), outline=WC_INK)
         draw.polygon([(x + int(w * 0.26), y + int(h * 0.38)),
                       (x + int(w * 0.36), y + int(h * 0.24)),
-                      (x + int(w * 0.46), y + int(h * 0.38))], fill=(120, 90, 70))
+                      (x + int(w * 0.46), y + int(h * 0.38))],
+                     fill=(120, 90, 70), outline=WC_INK)
         _dots(draw, x + int(w * 0.08), y + int(h * 0.44), int(w * 0.36),
               int(h * 0.28), (255, 220, 130), 8, 1, 814, fill=0.6)
-        # chimney + smoke
+        # chimney + smoke, both outlined
         draw.rectangle([x + int(w * 0.52), y + int(h * 0.16),
-                        x + int(w * 0.58), y + int(h * 0.78)], fill=(90, 80, 70))
+                        x + int(w * 0.58), y + int(h * 0.78)],
+                       fill=(90, 80, 70), outline=WC_INK, width=2)
         for fx, fy, pr in [(0.55, 0.16, 5), (0.59, 0.08, 4)]:
             draw.ellipse([x + int(w * fx) - pr, y + int(h * fy) - pr,
                           x + int(w * fx) + pr, y + int(h * fy) + pr],
-                         fill=(110, 110, 110))
-        # ground
+                         fill=(110, 110, 110), outline=WC_INK, width=1)
+        # ground: flat band + hatch + bold top edge
         draw.rectangle([x, y + int(h * 0.78), x + w, y + h], fill=(150, 140, 120))
+        wc_hatch(draw, x, y + int(h * 0.80), w, int(h * 0.18), (128, 118, 100),
+                 spacing=6, angle=-45, width=1)
+        draw.line([x, y + int(h * 0.78), x + w, y + int(h * 0.78)],
+                  fill=WC_INK, width=2)
         # crowd, bottom, across
         for cx in (0.62, 0.70, 0.78, 0.86, 0.94):
             _figure(draw, x + int(w * cx), y + h - 1, 16, INK)
@@ -895,6 +1134,9 @@ def paint(draw, n, x, y, w, h):
         draw.rectangle([x + int(w * 0.62), y + 3, x + int(w * 0.98), y + 17],
                        fill=(255, 255, 255), outline=RED)
         draw.text((x + int(w * 0.64), y + 5), "55 SHUT", font=cap, fill=RED)
+
+    # woodcut block edge around every art panel
+    wc_border(draw, x, y, w, h)
 
 # ---------------------------------------------------------------- layout
 def main():
