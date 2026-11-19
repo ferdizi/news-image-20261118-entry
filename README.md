@@ -13,9 +13,11 @@ and an also-on list. Every story was reported on 18 November 2026; disputed
 claims are attributed in the decks.
 
 Built from a study of the live top 5 (see STUDY.md): the winning format is
-a navy-band masthead with a huge serif date, 11–12 illustrated mains led by
+a navy-band masthead with a huge serif date, 13 illustrated mains led by
 the consensus top 3 (Bahrain, Kerch Bridge, Trump in Manila), a numbered
-map, and a numbered also-on list.
+map, a numbered also-on list, and a "Today's Numbers" sidebar with the
+day's three biggest figures. One colour per continent marks a story's tag
+stripe, its dot on the map and its also-on number.
 
 The poster is drawn by `build_poster.py` (Pillow); `entry.png` is its
 deterministic output, and `main.ts` copies it to `/output/entry.png`.
