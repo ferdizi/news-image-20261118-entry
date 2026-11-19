@@ -1,14 +1,14 @@
-// news-image-20261118 entry: the program copies the poster beside it to
-// /output/entry.png. Outside the grader's container, MAKEFUN_OUTPUT_DIR
-// stands in for /output:
-//   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
+// Entry program for news-image-20261118.
 //
-// The poster itself is drawn by build_poster.py (Pillow, flat vector-style
-// drawings); entry.png is its deterministic output. The gate takes a whole
-// PNG or JPEG of at most 1 MiB and 1024 by 1024 pixels, and the judge sees
-// exactly the bytes copied.
+// The poster (entry.png, drawn by build_poster.py) sits next to this file.
+// This program copies it to the output directory the grader reads:
+// /output/entry.png inside the grading container, or $MAKEFUN_OUTPUT_DIR
+// when set (handy for a local run: MAKEFUN_OUTPUT_DIR=out node main.ts).
+// The file must stay a PNG or JPEG of at most 1 MiB and 1024x1024 px.
 
-import { copyFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
-copyFileSync(new URL('./entry.png', import.meta.url), join(process.env.MAKEFUN_OUTPUT_DIR ?? '/output', 'entry.png'));
+const outDir = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
+mkdirSync(outDir, { recursive: true });
+copyFileSync(new URL('./entry.png', import.meta.url), join(outDir, 'entry.png'));

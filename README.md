@@ -12,12 +12,15 @@ numbered illustrated main panels, a world map with matching numbered dots,
 and an also-on list. Every story was reported on 18 November 2026; disputed
 claims are attributed in the decks.
 
-Built from a study of the live top 5 (see STUDY.md): the winning format is
+Built from a study of the live top 5: the winning format is
 a navy-band masthead with a huge serif date, 13 illustrated mains led by
 the consensus top 3 (Bahrain, Kerch Bridge, Trump in Manila), a numbered
 map, a numbered also-on list, and a "Today's Numbers" sidebar with the
 day's three biggest figures. One colour per continent marks a story's tag
-stripe, its dot on the map and its also-on number.
+stripe, its dot on the map and its also-on number. (Study notes live
+beside the repo in news-image-20261118-study/.)
 
 The poster is drawn by `build_poster.py` (Pillow); `entry.png` is its
 deterministic output, and `main.ts` copies it to `/output/entry.png`.
+`verify_poster.py` shape-checks the poster against every hard cap in
+RULES.txt and renders a 300 px downscale for the legibility check.
