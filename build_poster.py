@@ -28,6 +28,16 @@ art (bigger plane, escort jets, red carpet), the small mains get taller
 art (58px) and bigger headlines, and the also-on list gets wider row
 spacing with bigger map pins and dots.
 
+v4 (real art-density rebuild, same session): v3 scored 98.39% (rank
+421/12,609) against a 98.87% top-50 line. Comparing the top 3 posters
+(99.14-99.15%) showed the gap is art density, not layout: their panels
+are full detailed scenes, ours are flat icons on mostly-empty fills.
+v4 keeps the same 40 stories, facts, grid, numbers line, region bar,
+map and footer, and reworks ONLY the art: every panel gets a full
+gradient setting, a large middle subject (~60% of the panel), a
+foreground overlap, and deterministic dot/star texture, so no panel
+reads as blank. A red "18 NOV" date badge is added to the masthead.
+
 Draws a 1024x1024 page with Pillow. Deterministic.
 Run: python3 build_poster.py   (writes entry.png next to this file)
 """
@@ -378,26 +388,96 @@ def _flag(draw, x, y, w, h, kind):
                           x + w * sx + r, y + h * sy + r], fill=(255, 255, 255))
 
 
+def _lcg(seed):
+    """Deterministic tiny PRNG (LCG) — same sequence on every run."""
+    s = seed
+    while True:
+        s = (1103515245 * s + 12345) & 0x7FFFFFFF
+        yield s / 0x7FFFFFFF
+
+
+def _dots(draw, x, y, w, h, col, step, r, seed, fill=0.62):
+    """Deterministic dot texture over a region (windows, stars, grain)."""
+    rng = _lcg(seed)
+    row = 0
+    yy = y + step // 2
+    while yy < y + h:
+        xx = x + step // 2 + (row % 2) * (step // 2)
+        while xx < x + w:
+            if next(rng) < fill:
+                draw.ellipse([xx - r, yy - r, xx + r, yy + r], fill=col)
+            xx += step
+        yy += step
+        row += 1
+
+
+def _stars(draw, x, y, w, h, n, seed, col=(255, 255, 255)):
+    """Deterministic scattered stars."""
+    rng = _lcg(seed)
+    for _ in range(n):
+        sx = x + int(next(rng) * w)
+        sy = y + int(next(rng) * h)
+        r = 1 if next(rng) < 0.7 else 2
+        draw.ellipse([sx - r, sy - r, sx + r, sy + r], fill=col)
+
+
+def _burst(draw, cx, cy, r, col, spikes=8):
+    """Starburst / explosion: alternating long/short spikes."""
+    pts = []
+    for k in range(spikes * 2):
+        ang = math.pi * k / spikes
+        rr = r if k % 2 == 0 else r * 0.38
+        pts.append((cx + math.cos(ang) * rr, cy + math.sin(ang) * rr))
+    draw.polygon(pts, fill=col)
+
+
+def _palm(draw, x, y, s, col):
+    """Small palm silhouette: trunk + 5 fronds, rooted at (x, y)."""
+    draw.line([(x, y), (x + int(0.10 * s), y - s)], fill=col, width=3)
+    tx, ty = x + int(0.10 * s), y - s
+    for dx, dy in [(-0.55, -0.25), (-0.35, -0.45), (0.0, -0.55),
+                   (0.35, -0.45), (0.55, -0.25)]:
+        draw.line([(tx, ty), (tx + int(dx * s), ty + int(dy * s))],
+                  fill=col, width=2)
+
+
+def _figure(draw, x, y, s, col):
+    """Simple standing figure silhouette (head + body), feet at (x, y)."""
+    draw.ellipse([x - int(0.14 * s), y - s, x + int(0.14 * s),
+                  y - int(0.72 * s)], fill=col)
+    draw.polygon([(x - int(0.22 * s), y),
+                  (x - int(0.16 * s), y - int(0.72 * s)),
+                  (x + int(0.16 * s), y - int(0.72 * s)),
+                  (x + int(0.22 * s), y)], fill=col)
+
+
 def paint(draw, n, x, y, w, h):
-    """Vector scene per main. Leads (1-3) get the tall art box; the rest
+    """Vector scene per main. v4: every panel is a full 3-plane scene —
+    gradient setting, large middle subject (~60% of the panel, cropped
+    at edges), foreground overlap — plus deterministic texture so no
+    panel reads as blank. Leads (1-3) get the tall art box; the rest
     get the short one. All original drawings."""
-    if n == 1:  # Shenzhen dusk: plane, skyline, three flags
+    if n == 1:  # Shenzhen dusk: terminal glass, plane, handshake on carpet
         sky(draw, x, y, w, h, (246, 178, 110), (122, 92, 150))
-        draw.ellipse([x + int(w * 0.78), y + int(h * 0.10),
-                      x + int(w * 0.92), y + int(h * 0.34)], fill=(255, 214, 130))
-        for bx, bw, bh in [(0.02, 0.10, 0.55), (0.14, 0.07, 0.72),
-                           (0.24, 0.12, 0.48), (0.38, 0.08, 0.66),
-                           (0.50, 0.10, 0.58), (0.64, 0.07, 0.75),
-                           (0.74, 0.09, 0.52), (0.86, 0.10, 0.62)]:
+        # terminal glass: vertical mullions across the back
+        for gx in range(0, w + 1, 26):
+            draw.line([(x + gx, y), (x + gx, y + int(h * 0.42))],
+                      fill=(90, 70, 110), width=2)
+        draw.ellipse([x + int(w * 0.80), y + int(h * 0.06),
+                      x + int(w * 0.94), y + int(h * 0.34)], fill=(255, 214, 130))
+        # skyline, full width, denser, with lit windows
+        for bx, bw, bh in [(0.00, 0.09, 0.52), (0.10, 0.07, 0.68),
+                           (0.18, 0.11, 0.46), (0.30, 0.08, 0.62),
+                           (0.39, 0.10, 0.50), (0.50, 0.07, 0.70),
+                           (0.58, 0.11, 0.55), (0.70, 0.08, 0.66),
+                           (0.79, 0.09, 0.48), (0.89, 0.11, 0.60)]:
             draw.rectangle([x + int(w * bx), y + h - int(h * bh),
                             x + int(w * (bx + bw)), y + h], fill=(52, 48, 74))
-        for wx in (0.06, 0.18, 0.28, 0.42, 0.55, 0.68, 0.80, 0.90):
-            draw.rectangle([x + int(w * wx), y + int(h * 0.62),
-                            x + int(w * wx) + 3, y + int(h * 0.72)],
-                           fill=(255, 214, 130))
+        _dots(draw, x, y + int(h * 0.55), w, int(h * 0.45), (255, 214, 130),
+              9, 1, 101, fill=0.5)
         # plane silhouette (bigger) + escort jets overhead
-        px, py = x + int(w * 0.26), y + int(h * 0.30)
-        draw.ellipse([px, py - 8, px + int(w * 0.48), py + 8], fill=(250, 250, 250))
+        px, py = x + int(w * 0.24), y + int(h * 0.30)
+        draw.ellipse([px, py - 8, px + int(w * 0.50), py + 8], fill=(250, 250, 250))
         draw.polygon([(px + int(w * 0.30), py - 6),
                       (px + int(w * 0.40), py - 26),
                       (px + int(w * 0.44), py - 26),
@@ -409,276 +489,412 @@ def paint(draw, n, x, y, w, h):
         draw.polygon([(px + int(w * 0.40), py - 4),
                       (px + int(w * 0.48), py - 12),
                       (px + int(w * 0.48), py - 2)], fill=(250, 250, 250))
-        # escort jets overhead
         for jx, jy in [(0.10, 0.12), (0.24, 0.07)]:
             jpx, jpy = x + int(w * jx), y + int(h * jy)
             draw.polygon([(jpx, jpy - 4), (jpx + 16, jpy), (jpx, jpy + 4)],
                          fill=(250, 250, 250))
+        # red carpet + gold edge + runway lights (foreground)
+        draw.rectangle([x, y + h - 7, x + w, y + h], fill=(176, 58, 46))
+        draw.rectangle([x, y + h - 9, x + w, y + h - 7], fill=(255, 214, 130))
+        for lx in range(8, w, 22):
+            draw.ellipse([x + lx - 2, y + h - 14, x + lx + 2, y + h - 10],
+                         fill=(255, 214, 130))
+        # two handshake figures on the carpet, centre
+        fx = x + int(w * 0.44)
+        _figure(draw, fx, y + h - 9, 26, (20, 20, 30))
+        _figure(draw, fx + 34, y + h - 9, 26, (20, 20, 30))
+        draw.ellipse([fx + 13, y + h - 26, fx + 21, y + h - 18],
+                     fill=(255, 214, 130))
+        # flags, bottom-left
         for i, kind in enumerate(["cn", "us", "ru"]):
-            fx = 0.06 + i * 0.30
-            _flag(draw, x + int(w * fx), y + int(h * 0.78),
-                  int(w * 0.16), int(h * 0.16), kind)
-        # red carpet along the base of the art
-        draw.rectangle([x, y + h - 6, x + w, y + h], fill=(176, 58, 46))
-    elif n == 2:  # Gulf night: radar dome, drones, interceptors
+            _flag(draw, x + int(w * (0.04 + i * 0.11)), y + int(h * 0.72),
+                  int(w * 0.09), int(h * 0.16), kind)
+    elif n == 2:  # Gulf night: radar, drone swarm, interceptors, burst
         sky(draw, x, y, w, h, (16, 28, 56), (44, 68, 104))
-        for sx, sy, r in [(0.12, 0.15, 2), (0.30, 0.08, 2), (0.55, 0.12, 2),
-                          (0.72, 0.07, 2), (0.88, 0.18, 2), (0.44, 0.20, 2)]:
-            draw.ellipse([x + int(w * sx) - r, y + int(h * sy) - r,
-                          x + int(w * sx) + r, y + int(h * sy) + r],
-                         fill=(255, 255, 255))
-        draw.rectangle([x, y + int(h * 0.72), x + w, y + h], fill=(24, 52, 84))
-        draw.polygon([(x, y + h), (x + int(w * 0.42), y + int(h * 0.72)),
-                      (x + w, y + h)], fill=(16, 38, 66))
-        draw.ellipse([x + int(w * 0.06), y + int(h * 0.42),
-                      x + int(w * 0.36), y + int(h * 0.78)], outline=(220, 225, 235), width=4)
-        draw.line([x + int(w * 0.21), y + int(h * 0.78), x + int(w * 0.21), y + h - 3],
-                  fill=(220, 225, 235), width=4)
-        for cx, cy, r in [(0.52, 0.22, 6), (0.60, 0.30, 5), (0.48, 0.32, 4)]:
+        _stars(draw, x, y, w, int(h * 0.55), 26, 202)
+        # sea, bottom third, with wave lines
+        draw.rectangle([x, y + int(h * 0.68), x + w, y + h], fill=(24, 52, 84))
+        for wy in (0.74, 0.82, 0.90):
+            for wx in range(0, w, 18):
+                draw.arc([x + wx, y + int(h * wy) - 3, x + wx + 16,
+                          y + int(h * wy) + 3], 180, 360, fill=(120, 160, 200),
+                         width=2)
+        # coastline silhouette, bottom
+        draw.polygon([(x, y + h), (x + int(w * 0.30), y + int(h * 0.72)),
+                      (x + int(w * 0.55), y + int(h * 0.82)),
+                      (x + w, y + int(h * 0.78)), (x + w, y + h)],
+                     fill=(16, 38, 66))
+        # radar dome, left, bigger
+        draw.ellipse([x + int(w * 0.04), y + int(h * 0.38),
+                      x + int(w * 0.34), y + int(h * 0.80)],
+                     outline=(220, 225, 235), width=4)
+        draw.line([x + int(w * 0.19), y + int(h * 0.80),
+                   x + int(w * 0.19), y + h - 2], fill=(220, 225, 235), width=4)
+        # drone swarm: red dots + white diamonds
+        for cx, cy, r in [(0.46, 0.18, 6), (0.54, 0.28, 5), (0.42, 0.30, 4),
+                          (0.60, 0.16, 5), (0.66, 0.30, 4), (0.50, 0.42, 4)]:
             draw.ellipse([x + int(w * cx) - r, y + int(h * cy) - r,
                           x + int(w * cx) + r, y + int(h * cy) + r], fill=RED)
-        for cx, cy in [(0.72, 0.18), (0.84, 0.32), (0.70, 0.45)]:
+        for cx, cy in [(0.74, 0.14), (0.84, 0.28), (0.72, 0.44), (0.90, 0.40)]:
             draw.polygon([(x + int(w * cx), y + int(h * (cy - 0.05))),
                           (x + int(w * (cx + 0.09)), y + int(h * cy)),
                           (x + int(w * cx), y + int(h * (cy + 0.05))),
-                          (x + int(w * (cx - 0.09)), y + int(h * cy))], fill=(250, 250, 250))
+                          (x + int(w * (cx - 0.09)), y + int(h * cy))],
+                         fill=(250, 250, 250))
+        # tracer lines
         draw.line([x + int(w * 0.55), y + int(h * 0.55),
                    x + int(w * 0.75), y + int(h * 0.42)], fill=(255, 214, 130), width=2)
         draw.line([x + int(w * 0.62), y + int(h * 0.62),
                    x + int(w * 0.82), y + int(h * 0.50)], fill=(255, 214, 130), width=2)
-    elif n == 3:  # Voyager: black space, Earth, probe, dotted trajectory
+        # explosion burst, top-right
+        _burst(draw, x + int(w * 0.88), y + int(h * 0.14), 12, (232, 132, 42))
+        _burst(draw, x + int(w * 0.88), y + int(h * 0.14), 6, (255, 214, 130))
+    elif n == 3:  # Voyager: dense stars, big Earth, probe, trajectory
         draw.rectangle([x, y, x + w, y + h], fill=(8, 10, 20))
-        for sx, sy, r in [(0.08, 0.12, 2), (0.20, 0.06, 1), (0.34, 0.18, 2),
-                          (0.48, 0.08, 1), (0.62, 0.16, 2), (0.76, 0.06, 1),
-                          (0.90, 0.14, 2), (0.14, 0.30, 1), (0.58, 0.28, 1),
-                          (0.82, 0.30, 1)]:
-            draw.ellipse([x + int(w * sx) - r, y + int(h * sy) - r,
-                          x + int(w * sx) + r, y + int(h * sy) + r],
-                         fill=(255, 255, 255))
-        draw.ellipse([x + int(w * 0.02), y + int(h * 0.68),
-                      x + int(w * 0.22), y + int(h * 0.98)], fill=(52, 118, 196))
-        draw.ellipse([x + int(w * 0.06), y + int(h * 0.74),
-                      x + int(w * 0.14), y + int(h * 0.86)], fill=(86, 158, 92))
-        draw.ellipse([x + int(w * 0.14), y + int(h * 0.86),
+        _stars(draw, x, y, w, h, 30, 303)
+        # Earth, bottom-left, bigger
+        draw.ellipse([x + int(w * 0.00), y + int(h * 0.60),
+                      x + int(w * 0.26), y + int(h * 0.98)], fill=(52, 118, 196))
+        draw.ellipse([x + int(w * 0.05), y + int(h * 0.68),
+                      x + int(w * 0.13), y + int(h * 0.82)], fill=(86, 158, 92))
+        draw.ellipse([x + int(w * 0.14), y + int(h * 0.84),
                       x + int(w * 0.20), y + int(h * 0.94)], fill=(86, 158, 92))
+        draw.arc([x + int(w * 0.02), y + int(h * 0.70), x + int(w * 0.20),
+                  y + int(h * 0.92)], 200, 340, fill=(255, 255, 255), width=2)
         # dotted trajectory Earth -> probe
-        for t in range(0, 11):
-            fx = 0.20 + t * 0.055
-            fy = 0.80 - t * 0.045
+        for t in range(0, 13):
+            fx = 0.20 + t * 0.05
+            fy = 0.78 - t * 0.042
             draw.ellipse([x + int(w * fx) - 2, y + int(h * fy) - 2,
                           x + int(w * fx) + 2, y + int(h * fy) + 2],
                          fill=(255, 214, 130))
-        # probe: gold dish + body + boom
-        px, py = x + int(w * 0.74), y + int(h * 0.46)
-        draw.ellipse([px - 16, py - 16, px + 16, py + 16], outline=(255, 214, 130), width=3)
+        # probe: gold dish + body + boom, bigger
+        px, py = x + int(w * 0.78), y + int(h * 0.48)
+        draw.ellipse([px - 17, py - 17, px + 17, py + 17],
+                     outline=(255, 214, 130), width=3)
         draw.line([px, py, px - 26, py + 22], fill=(220, 225, 235), width=3)
         draw.rectangle([px - 26, py + 20, px - 14, py + 28], fill=(200, 200, 200))
         draw.line([px + 8, py + 10, px + 30, py + 30], fill=(220, 225, 235), width=3)
         draw.ellipse([px + 28, py + 28, px + 34, py + 34], fill=(255, 214, 130))
         cap = font(SANS_B, 11)
-        draw.text((x + int(w * 0.52), y + int(h * 0.06)), "1 LIGHT-DAY",
+        draw.text((x + int(w * 0.28), y + int(h * 0.04)), "1 LIGHT-DAY",
                   font=cap, fill=(255, 214, 130))
-        draw.text((x + int(w * 0.52), y + int(h * 0.20)), "25.9 BILLION KM",
+        draw.text((x + int(w * 0.28), y + int(h * 0.16)), "25.9 BILLION KM",
                   font=cap, fill=(255, 255, 255))
-    elif n == 4:  # Russia drones: night sky, drone dots, flak bursts
+    elif n == 4:  # Russia drones: swarm, flak bursts, rooftops
         sky(draw, x, y, w, h, (18, 24, 48), (52, 66, 96))
-        for cx, cy, r in [(0.20, 0.30, 5), (0.45, 0.22, 4), (0.70, 0.34, 5),
-                          (0.85, 0.20, 4)]:
+        _stars(draw, x, y, w, int(h * 0.55), 12, 404)
+        for cx, cy, r in [(0.12, 0.28, 5), (0.28, 0.20, 4), (0.44, 0.30, 5),
+                          (0.60, 0.22, 4), (0.76, 0.30, 5), (0.88, 0.20, 4),
+                          (0.36, 0.44, 4), (0.68, 0.46, 4)]:
             draw.ellipse([x + int(w * cx) - r, y + int(h * cy) - r,
                           x + int(w * cx) + r, y + int(h * cy) + r], fill=RED)
-        for cx, cy in [(0.12, 0.55), (0.38, 0.48), (0.60, 0.58), (0.88, 0.50)]:
+        for cx, cy in [(0.08, 0.55), (0.24, 0.50), (0.52, 0.56), (0.84, 0.52)]:
             draw.polygon([(x + int(w * cx), y + int(h * (cy - 0.06))),
                           (x + int(w * (cx + 0.08)), y + int(h * cy)),
                           (x + int(w * cx), y + int(h * (cy + 0.06))),
-                          (x + int(w * (cx - 0.08)), y + int(h * cy))], fill=(250, 250, 250))
+                          (x + int(w * (cx - 0.08)), y + int(h * cy))],
+                         fill=(250, 250, 250))
+        # flak bursts
+        _burst(draw, x + int(w * 0.30), y + int(h * 0.34), 8, (232, 132, 42))
+        _burst(draw, x + int(w * 0.78), y + int(h * 0.40), 7, (232, 132, 42))
+        # rooftop silhouette, full width bottom
         draw.rectangle([x, y + int(h * 0.78), x + w, y + h], fill=(30, 30, 40))
-        draw.ellipse([x + int(w * 0.30) - 8, y + int(h * 0.62) - 8,
-                      x + int(w * 0.30) + 8, y + int(h * 0.62) + 8], fill=(232, 132, 42))
-        draw.ellipse([x + int(w * 0.78) - 6, y + int(h * 0.68) - 6,
-                      x + int(w * 0.78) + 6, y + int(h * 0.68) + 6], fill=(232, 132, 42))
-    elif n == 5:  # Fed: classical building + falling chart
-        draw.rectangle([x, y, x + w, y + h], fill=(232, 238, 225))
-        draw.rectangle([x + int(w * 0.08), y + int(h * 0.55),
-                        x + int(w * 0.44), y + int(h * 0.62)], fill=(120, 115, 105))
-        draw.rectangle([x + int(w * 0.06), y + int(h * 0.62),
-                        x + int(w * 0.46), y + int(h * 0.92)], fill=(200, 195, 180))
-        for cx in (0.11, 0.19, 0.27, 0.35, 0.43):
-            draw.rectangle([x + int(w * cx), y + int(h * 0.42),
-                            x + int(w * (cx + 0.03)), y + int(h * 0.62)],
+        for bx, bw, bh in [(0.00, 0.16, 0.18), (0.18, 0.12, 0.26),
+                           (0.32, 0.14, 0.16), (0.48, 0.12, 0.24),
+                           (0.62, 0.14, 0.18), (0.78, 0.12, 0.26),
+                           (0.90, 0.10, 0.18)]:
+            draw.rectangle([x + int(w * bx), y + h - int(h * bh),
+                            x + int(w * (bx + bw)), y + h], fill=(20, 20, 28))
+        draw.line([x + int(w * 0.30), y + int(h * 0.50),
+                   x + int(w * 0.52), y + int(h * 0.34)], fill=(255, 214, 130), width=2)
+    elif n == 5:  # Fed: building + chart, full
+        sky(draw, x, y, w, h, (232, 238, 225), (210, 220, 200))
+        # chart grid, right half
+        for gx in range(int(w * 0.54), w, 12):
+            draw.line([(x + gx, y + 4), (x + gx, y + h - 4)],
+                      fill=(200, 205, 190), width=1)
+        # building, left
+        draw.rectangle([x + int(w * 0.06), y + int(h * 0.52),
+                        x + int(w * 0.48), y + int(h * 0.60)], fill=(120, 115, 105))
+        draw.rectangle([x + int(w * 0.04), y + int(h * 0.60),
+                        x + int(w * 0.50), y + h], fill=(200, 195, 180))
+        for cx in (0.09, 0.17, 0.25, 0.33, 0.41):
+            draw.rectangle([x + int(w * cx), y + int(h * 0.38),
+                            x + int(w * (cx + 0.03)), y + int(h * 0.60)],
                            fill=(120, 115, 105))
-        draw.polygon([(x + int(w * 0.04), y + int(h * 0.42)),
-                      (x + int(w * 0.26), y + int(h * 0.18)),
-                      (x + int(w * 0.48), y + int(h * 0.42))], fill=(150, 145, 135))
-        pts = [(x + int(w * 0.56), y + int(h * 0.30)), (x + int(w * 0.68), y + int(h * 0.45)),
-               (x + int(w * 0.78), y + int(h * 0.42)), (x + int(w * 0.92), y + int(h * 0.66))]
-        draw.line(pts, fill=RED, width=4)
-        draw.polygon([(x + int(w * 0.92), y + int(h * 0.66)),
-                      (x + int(w * 0.84), y + int(h * 0.64)),
-                      (x + int(w * 0.92), y + int(h * 0.54))], fill=RED)
-        cap = font(SANS_B, 11)
-        draw.text((x + int(w * 0.56), y + int(h * 0.74)), "DOW -1.1%",
-                  font=cap, fill=RED)
-    elif n == 6:  # Cyclone Akvan: spiral over the sea, rain, coast
-        sky(draw, x, y, w, h, (170, 190, 215), (215, 225, 230))
-        cx, cy = x + int(w * 0.38), y + int(h * 0.52)
-        for rr, col in [(0.42, (200, 205, 210)), (0.32, (150, 165, 180)),
-                        (0.22, (110, 130, 150)), (0.12, (70, 95, 120))]:
-            r = int(min(w, h) * rr)
-            draw.ellipse([cx - r, cy - r, cx + r, cy + r], outline=col, width=4)
-        draw.ellipse([cx - 4, cy - 4, cx + 4, cy + 4], fill=NAVY)
-        draw.rectangle([x + int(w * 0.78), y + int(h * 0.55), x + w, y + h],
-                       fill=(62, 172, 82))
-        for dx in (0.12, 0.28, 0.44, 0.60):
-            draw.line([x + int(w * dx), y + int(h * 0.18),
-                       x + int(w * (dx - 0.04)), y + int(h * 0.38)],
-                      fill=(92, 162, 212), width=3)
+        draw.polygon([(x + int(w * 0.02), y + int(h * 0.38)),
+                      (x + int(w * 0.27), y + int(h * 0.12)),
+                      (x + int(w * 0.52), y + int(h * 0.38))], fill=(150, 145, 135))
+        _dots(draw, x + int(w * 0.06), y + int(h * 0.64), int(w * 0.42),
+              int(h * 0.30), (90, 85, 75), 7, 1, 505, fill=0.6)
+        # chart bars + falling red line, right
+        for bx, bh in [(0.56, 0.20), (0.64, 0.32), (0.72, 0.26),
+                       (0.80, 0.42), (0.88, 0.36)]:
+            draw.rectangle([x + int(w * bx), y + int(h * (0.92 - bh)),
+                            x + int(w * (bx + 0.06)), y + int(h * 0.92)],
+                           fill=(31, 78, 121))
+        pts = [(x + int(w * 0.56), y + int(h * 0.22)),
+               (x + int(w * 0.68), y + int(h * 0.36)),
+               (x + int(w * 0.80), y + int(h * 0.30)),
+               (x + int(w * 0.94), y + int(h * 0.52))]
+        draw.line(pts, fill=RED, width=3)
+        draw.polygon([(x + int(w * 0.94), y + int(h * 0.52)),
+                      (x + int(w * 0.86), y + int(h * 0.50)),
+                      (x + int(w * 0.94), y + int(h * 0.42))], fill=RED)
         cap = font(SANS_B, 10)
-        draw.text((x + int(w * 0.04), y + int(h * 0.04)), "145 KM/H",
+        draw.text((x + int(w * 0.54), y + int(h * 0.04)), "DOW -1.1%",
                   font=cap, fill=RED)
-    elif n == 7:  # El Obeid: desert, drone, smoke column
+    elif n == 6:  # Cyclone Akvan: spiral, sea, coast, palm
+        sky(draw, x, y, w, h, (170, 190, 215), (215, 225, 230))
+        # rain streaks across the whole panel
+        for dx in (0.06, 0.16, 0.26, 0.36, 0.46, 0.56, 0.66, 0.76, 0.86):
+            draw.line([x + int(w * dx), y + int(h * 0.10),
+                       x + int(w * (dx - 0.03)), y + int(h * 0.30)],
+                      fill=(92, 162, 212), width=2)
+        # spiral, centre-left, bigger
+        cx, cy = x + int(w * 0.36), y + int(h * 0.52)
+        for rr, col in [(0.40, (200, 205, 210)), (0.30, (150, 165, 180)),
+                        (0.20, (110, 130, 150)), (0.10, (70, 95, 120))]:
+            r = int(min(w, h) * rr)
+            draw.ellipse([cx - r, cy - r, cx + r, cy + r], outline=col, width=3)
+        draw.ellipse([cx - 4, cy - 4, cx + 4, cy + 4], fill=NAVY)
+        # sea, bottom
+        draw.rectangle([x, y + int(h * 0.76), x + w, y + h], fill=(44, 110, 140))
+        for wx in range(0, w, 14):
+            draw.arc([x + wx, y + int(h * 0.82) - 2, x + wx + 12,
+                      y + int(h * 0.82) + 2], 180, 360, fill=(180, 220, 235),
+                     width=1)
+        # coast + palm, right
+        draw.rectangle([x + int(w * 0.82), y + int(h * 0.60),
+                        x + w, y + int(h * 0.76)], fill=(62, 172, 82))
+        _palm(draw, x + int(w * 0.90), y + int(h * 0.62), 16, (30, 90, 40))
+        # speed chip, top-left
+        cap = font(SANS_B, 10)
+        draw.rectangle([x + 3, y + 3, x + 62, y + 17], fill=(255, 255, 255),
+                       outline=RED)
+        draw.text((x + 6, y + 5), "145 KM/H", font=cap, fill=RED)
+    elif n == 7:  # El Obeid: desert, smoke column, drone, ruins
         sky(draw, x, y, w, h, (238, 206, 150), (220, 180, 120))
-        draw.rectangle([x, y + int(h * 0.70), x + w, y + h], fill=(196, 152, 96))
-        draw.ellipse([x + int(w * 0.72) - 5, y + int(h * 0.30) - 5,
-                      x + int(w * 0.72) + 5, y + int(h * 0.30) + 5], fill=(90, 90, 90))
-        draw.line([x + int(w * 0.72), y + int(h * 0.30),
-                   x + int(w * 0.72), y + int(h * 0.70)], fill=(90, 90, 90), width=2)
-        draw.polygon([(x + int(w * 0.68), y + int(h * 0.26)),
-                      (x + int(w * 0.76), y + int(h * 0.30)),
-                      (x + int(w * 0.68), y + int(h * 0.34))], fill=(60, 60, 60))
-        for cx, cy, r in [(0.25, 0.45, 0.07), (0.30, 0.35, 0.05), (0.22, 0.28, 0.04)]:
+        draw.ellipse([x + int(w * 0.80) - 8, y + int(h * 0.16) - 8,
+                      x + int(w * 0.80) + 8, y + int(h * 0.16) + 8],
+                     fill=(255, 220, 130))
+        # ground, bottom 38%, layered dune band
+        draw.rectangle([x, y + int(h * 0.62), x + w, y + h], fill=(196, 152, 96))
+        draw.rectangle([x, y + int(h * 0.62), x + w, y + int(h * 0.72)],
+                       fill=(212, 172, 116))
+        # smoke column, centre, slimmer puffs so they read as a column
+        for cx, cy, r in [(0.40, 0.55, 0.07), (0.46, 0.42, 0.055),
+                          (0.41, 0.30, 0.045), (0.47, 0.18, 0.035)]:
             rx, ry = int(w * r), int(w * r)
             draw.ellipse([x + int(w * cx) - rx, y + int(h * cy) - ry,
-                          x + int(w * cx) + rx, y + int(h * cy) + ry], fill=(110, 110, 110))
-        draw.rectangle([x + int(w * 0.10), y + int(h * 0.78),
-                        x + int(w * 0.30), y + int(h * 0.90)], fill=(120, 90, 60))
-        draw.rectangle([x + int(w * 0.55), y + int(h * 0.82),
-                        x + int(w * 0.70), y + int(h * 0.92)], fill=(120, 90, 60))
-    elif n == 8:  # EU loan: circle of stars + euro figure
-        draw.rectangle([x, y, x + w, y + h], fill=(232, 238, 248))
+                          x + int(w * cx) + rx, y + int(h * cy) + ry],
+                         fill=(110, 110, 110))
+        # drone, right, bigger + shadow on the ground
+        draw.ellipse([x + int(w * 0.70) - 6, y + int(h * 0.30) - 6,
+                      x + int(w * 0.70) + 6, y + int(h * 0.30) + 6],
+                     fill=(90, 90, 90))
+        draw.polygon([(x + int(w * 0.66), y + int(h * 0.26)),
+                      (x + int(w * 0.76), y + int(h * 0.30)),
+                      (x + int(w * 0.66), y + int(h * 0.34))], fill=(60, 60, 60))
+        draw.ellipse([x + int(w * 0.66), y + int(h * 0.64),
+                      x + int(w * 0.74), y + int(h * 0.68)], fill=(150, 115, 70))
+        # ruins, bottom
+        draw.rectangle([x + int(w * 0.06), y + int(h * 0.74),
+                        x + int(w * 0.24), y + h], fill=(120, 90, 60))
+        draw.rectangle([x + int(w * 0.80), y + int(h * 0.80),
+                        x + int(w * 0.94), y + h], fill=(120, 90, 60))
+    elif n == 8:  # EU loan: navy field, gold star ring, big euro disc
+        draw.rectangle([x, y, x + w, y + h], fill=NAVY)
+        _dots(draw, x, y, w, h, (60, 80, 130), 10, 1, 808, fill=0.5)
+        # star ring, centre-left
         cx, cy = x + int(w * 0.30), y + int(h * 0.50)
-        r = int(min(w, h) * 0.40)
         for k in range(12):
             ang = math.radians(k * 30 - 90)
-            sx = cx + math.cos(ang) * r
-            sy = cy + math.sin(ang) * r
+            sx = cx + math.cos(ang) * 26
+            sy = cy + math.sin(ang) * 26
             draw.ellipse([sx - 3, sy - 3, sx + 3, sy + 3], fill=(250, 212, 62))
-        draw.ellipse([cx - int(r * 0.55), cy - int(r * 0.55),
-                      cx + int(r * 0.55), cy + int(r * 0.55)], fill=NAVY)
-        lab = font(SERIF_B, 16 if h < 50 else 20)
+        # gold disc with the figure
+        draw.ellipse([cx - 18, cy - 18, cx + 18, cy + 18], fill=(250, 212, 62))
+        lab = font(SERIF_B, 10)
         tw = draw.textlength("\u20ac45bn", font=lab)
-        draw.text((cx - tw / 2, cy - 9), "\u20ac45bn", font=lab, fill=(255, 255, 255))
-        cap = font(SANS_B, 10 if h < 50 else 12)
-        draw.text((x + int(w * 0.60), y + int(h * 0.20)), "FOR",
-                  font=cap, fill=NAVY)
-        draw.text((x + int(w * 0.60), y + int(h * 0.40)), "UKRAINE",
-                  font=cap, fill=NAVY)
-        draw.text((x + int(w * 0.60), y + int(h * 0.60)), "2027",
-                  font=cap, fill=NAVY)
-    elif n == 9:  # UK inflation: basket + rising bars
-        draw.rectangle([x, y, x + w, y + h], fill=(238, 232, 220))
-        draw.polygon([(x + int(w * 0.10), y + int(h * 0.55)),
-                      (x + int(w * 0.40), y + int(h * 0.55)),
-                      (x + int(w * 0.36), y + int(h * 0.90)),
-                      (x + int(w * 0.14), y + int(h * 0.90))], fill=(150, 105, 60))
-        draw.arc([x + int(w * 0.18), y + int(h * 0.30),
-                  x + int(w * 0.32), y + int(h * 0.60)], 180, 360, fill=INK, width=3)
-        for bx, bh in [(0.55, 0.25), (0.65, 0.40), (0.75, 0.55), (0.85, 0.70)]:
-            draw.rectangle([x + int(w * bx), y + int(h * (0.92 - bh)),
-                            x + int(w * (bx + 0.07)), y + int(h * 0.92)],
-                           fill=(31, 78, 121))
-        draw.line([(x + int(w * 0.52), y + int(h * 0.60)),
-                   (x + int(w * 0.94), y + int(h * 0.18))], fill=RED, width=3)
-        draw.polygon([(x + int(w * 0.94), y + int(h * 0.18)),
-                      (x + int(w * 0.86), y + int(h * 0.18)),
-                      (x + int(w * 0.94), y + int(h * 0.30))], fill=RED)
+        draw.text((cx - tw / 2, cy - 7), "\u20ac45bn", font=lab, fill=NAVY)
+        # right: label + gold rule
         cap = font(SANS_B, 11)
-        draw.text((x + int(w * 0.52), y + int(h * 0.06)), "3.6%",
-                  font=cap, fill=RED)
-    elif n == 10:  # Gaza: tank silhouette, map line, smoke
+        draw.text((x + int(w * 0.58), y + int(h * 0.12)), "FOR",
+                  font=cap, fill=(255, 255, 255))
+        draw.text((x + int(w * 0.58), y + int(h * 0.32)), "UKRAINE",
+                  font=cap, fill=(255, 255, 255))
+        draw.text((x + int(w * 0.58), y + int(h * 0.52)), "2027",
+                  font=cap, fill=(250, 212, 62))
+        draw.rectangle([x + int(w * 0.58), y + int(h * 0.78),
+                        x + int(w * 0.96), y + int(h * 0.84)],
+                       fill=(250, 212, 62))
+    elif n == 9:  # UK inflation: basket, rising bars, red trend
+        sky(draw, x, y, w, h, (238, 232, 220), (222, 210, 190))
+        # shelf line, bottom
+        draw.rectangle([x, y + int(h * 0.90), x + w, y + h], fill=(190, 175, 150))
+        # basket, left, bigger, with goods
+        draw.polygon([(x + int(w * 0.08), y + int(h * 0.50)),
+                      (x + int(w * 0.40), y + int(h * 0.50)),
+                      (x + int(w * 0.36), y + int(h * 0.90)),
+                      (x + int(w * 0.12), y + int(h * 0.90))], fill=(150, 105, 60))
+        draw.arc([x + int(w * 0.16), y + int(h * 0.26),
+                  x + int(w * 0.32), y + int(h * 0.56)], 180, 360, fill=INK, width=3)
+        for gx, gy in [(0.14, 0.44), (0.22, 0.40), (0.30, 0.44),
+                       (0.18, 0.48), (0.28, 0.48)]:
+            draw.ellipse([x + int(w * gx) - 4, y + int(h * gy) - 4,
+                          x + int(w * gx) + 4, y + int(h * gy) + 4],
+                         fill=(200, 80, 60))
+        # bars, right, taller
+        for bx, bh in [(0.48, 0.22), (0.58, 0.34), (0.68, 0.48),
+                       (0.78, 0.62), (0.88, 0.74)]:
+            draw.rectangle([x + int(w * bx), y + int(h * (0.90 - bh)),
+                            x + int(w * (bx + 0.07)), y + int(h * 0.90)],
+                           fill=(31, 78, 121))
+        # red trend arrow across the bars
+        draw.line([(x + int(w * 0.46), y + int(h * 0.62)),
+                   (x + int(w * 0.94), y + int(h * 0.14))], fill=RED, width=3)
+        draw.polygon([(x + int(w * 0.94), y + int(h * 0.14)),
+                      (x + int(w * 0.86), y + int(h * 0.14)),
+                      (x + int(w * 0.94), y + int(h * 0.26))], fill=RED)
+        cap = font(SANS_B, 11)
+        draw.text((x + 4, y + 3), "3.6%", font=cap, fill=RED)
+    elif n == 10:  # Gaza: tank, dust, smoke, red line
         sky(draw, x, y, w, h, (220, 205, 180), (200, 185, 160))
-        draw.rectangle([x, y + int(h * 0.72), x + w, y + h], fill=(172, 148, 108))
-        draw.rectangle([x + int(w * 0.14), y + int(h * 0.58),
-                        x + int(w * 0.55), y + int(h * 0.74)], fill=(74, 84, 66))
-        draw.rectangle([x + int(w * 0.20), y + int(h * 0.42),
-                        x + int(w * 0.44), y + int(h * 0.58)], fill=(74, 84, 66))
-        draw.line([x + int(w * 0.44), y + int(h * 0.48),
-                   x + int(w * 0.78), y + int(h * 0.42)], fill=(74, 84, 66), width=5)
-        for wx in (0.16, 0.26, 0.36, 0.46):
-            draw.ellipse([x + int(w * wx) - 4, y + int(h * 0.72) - 4,
-                          x + int(w * wx) + 4, y + int(h * 0.72) + 4], fill=(40, 40, 40))
-        for cx, cy, r in [(0.82, 0.30, 0.08), (0.88, 0.20, 0.05)]:
+        # dust cloud behind the tank
+        for cx, cy, r in [(0.30, 0.55, 0.10), (0.38, 0.48, 0.08),
+                          (0.22, 0.48, 0.07)]:
             rx, ry = int(w * r), int(w * r)
             draw.ellipse([x + int(w * cx) - rx, y + int(h * cy) - ry,
-                          x + int(w * cx) + rx, y + int(h * cy) + ry], fill=(110, 110, 110))
-        draw.line([x + int(w * 0.62), y + int(h * 0.80),
-                   x + int(w * 0.90), y + int(h * 0.80)], fill=RED, width=2)
-        for dx in (0.66, 0.74, 0.82):
-            draw.line([x + int(w * dx), y + int(h * 0.80),
-                       x + int(w * dx), y + int(h * 0.86)], fill=RED, width=2)
-    elif n == 11:  # Jeffries: capitol dome + ballot 251-11
-        draw.rectangle([x, y, x + w, y + h], fill=(232, 238, 248))
-        draw.rectangle([x + int(w * 0.08), y + int(h * 0.78),
-                        x + int(w * 0.50), y + int(h * 0.92)], fill=(200, 195, 180))
-        draw.ellipse([x + int(w * 0.16), y + int(h * 0.30),
-                      x + int(w * 0.42), y + int(h * 0.82)], fill=(220, 218, 205))
-        draw.rectangle([x + int(w * 0.26), y + int(h * 0.16),
-                        x + int(w * 0.32), y + int(h * 0.34)], fill=(220, 218, 205))
-        draw.ellipse([x + int(w * 0.27), y + int(h * 0.12),
-                      x + int(w * 0.31), y + int(h * 0.20)], fill=(220, 218, 205))
-        for cx in (0.12, 0.22, 0.32, 0.42):
-            draw.rectangle([x + int(w * cx), y + int(h * 0.62),
-                            x + int(w * (cx + 0.04)), y + int(h * 0.78)],
+                          x + int(w * cx) + rx, y + int(h * cy) + ry],
+                         fill=(190, 170, 140))
+        # ground, bottom 34%
+        draw.rectangle([x, y + int(h * 0.66), x + w, y + h], fill=(172, 148, 108))
+        # tank, bigger, centre-left
+        draw.rectangle([x + int(w * 0.10), y + int(h * 0.52),
+                        x + int(w * 0.56), y + int(h * 0.70)], fill=(74, 84, 66))
+        draw.rectangle([x + int(w * 0.18), y + int(h * 0.36),
+                        x + int(w * 0.44), y + int(h * 0.52)], fill=(74, 84, 66))
+        draw.line([x + int(w * 0.44), y + int(h * 0.42),
+                   x + int(w * 0.74), y + int(h * 0.36)], fill=(74, 84, 66), width=5)
+        for wx in (0.14, 0.24, 0.34, 0.44, 0.52):
+            draw.ellipse([x + int(w * wx) - 4, y + int(h * 0.66) - 4,
+                          x + int(w * wx) + 4, y + int(h * 0.66) + 4],
+                         fill=(40, 40, 40))
+        # smoke, right, smaller and clear of the barrel tip
+        for cx, cy, r in [(0.88, 0.22, 0.05), (0.92, 0.14, 0.035),
+                          (0.84, 0.12, 0.03)]:
+            rx, ry = int(w * r), int(w * r)
+            draw.ellipse([x + int(w * cx) - rx, y + int(h * cy) - ry,
+                          x + int(w * cx) + rx, y + int(h * cy) + ry],
+                         fill=(110, 110, 110))
+        # red dashed line, bottom-right
+        draw.line([x + int(w * 0.60), y + int(h * 0.82),
+                   x + int(w * 0.96), y + int(h * 0.82)], fill=RED, width=2)
+        for dx in (0.64, 0.72, 0.80, 0.88):
+            draw.line([x + int(w * dx), y + int(h * 0.82),
+                       x + int(w * dx), y + int(h * 0.90)], fill=RED, width=2)
+    elif n == 11:  # Jeffries: navy field, white capitol, ballot card
+        draw.rectangle([x, y, x + w, y + h], fill=NAVY)
+        _dots(draw, x, y, w, h, (60, 80, 130), 10, 1, 811, fill=0.5)
+        # capitol dome, centre-left, large
+        draw.rectangle([x + int(w * 0.06), y + int(h * 0.76),
+                        x + int(w * 0.44), y + h], fill=(220, 218, 205))
+        draw.ellipse([x + int(w * 0.12), y + int(h * 0.28),
+                      x + int(w * 0.38), y + int(h * 0.80)], fill=(220, 218, 205))
+        draw.rectangle([x + int(w * 0.22), y + int(h * 0.12),
+                        x + int(w * 0.28), y + int(h * 0.32)], fill=(220, 218, 205))
+        draw.ellipse([x + int(w * 0.23), y + int(h * 0.08),
+                      x + int(w * 0.27), y + int(h * 0.16)], fill=(250, 212, 62))
+        draw.line([x + int(w * 0.25), y + int(h * 0.08),
+                   x + int(w * 0.25), y + int(h * 0.02)], fill=(250, 212, 62),
+                  width=2)
+        for cx in (0.10, 0.18, 0.26, 0.34):
+            draw.rectangle([x + int(w * cx), y + int(h * 0.60),
+                            x + int(w * (cx + 0.04)), y + int(h * 0.76)],
                            fill=(200, 195, 180))
-        draw.rectangle([x + int(w * 0.58), y + int(h * 0.28),
-                        x + int(w * 0.95), y + int(h * 0.76)], fill=(255, 255, 255), outline=NAVY, width=2)
-        lab = font(SERIF_B, 16)
+        # ballot card, right
+        draw.rectangle([x + int(w * 0.52), y + int(h * 0.18),
+                        x + int(w * 0.96), y + int(h * 0.86)],
+                       fill=(255, 255, 255), outline=(250, 212, 62), width=2)
+        lab = font(SERIF_B, 15)
         tw = draw.textlength("251\u201311", font=lab)
-        draw.text((x + int(w * 0.765) - tw / 2, y + int(h * 0.36)), "251\u201311",
+        draw.text((x + int(w * 0.74) - tw / 2, y + int(h * 0.26)), "251\u201311",
                   font=lab, fill=NAVY)
-    elif n == 12:  # GTA VI: neon controller + VI
-        draw.rectangle([x, y, x + w, y + h], fill=(24, 16, 44))
-        for sx, sy, r in [(0.10, 0.15, 2), (0.30, 0.08, 1), (0.55, 0.12, 2),
-                          (0.80, 0.10, 1), (0.92, 0.25, 2), (0.20, 0.30, 1)]:
-            draw.ellipse([x + int(w * sx) - r, y + int(h * sy) - r,
-                          x + int(w * sx) + r, y + int(h * sy) + r],
-                         fill=(255, 255, 255))
-        draw.ellipse([x + int(w * 0.08), y + int(h * 0.40),
-                      x + int(w * 0.92), y + int(h * 0.95)], fill=(48, 32, 88))
-        draw.ellipse([x + int(w * 0.20), y + int(h * 0.52),
-                      x + int(w * 0.28), y + int(h * 0.62)], fill=(24, 16, 44))
-        draw.ellipse([x + int(w * 0.72), y + int(h * 0.52),
-                      x + int(w * 0.80), y + int(h * 0.62)], fill=(24, 16, 44))
-        draw.line([x + int(w * 0.24), y + int(h * 0.66),
-                   x + int(w * 0.76), y + int(h * 0.66)], fill=(255, 120, 180), width=3)
-        lab = font(SERIF_B, 18 if h < 50 else 22)
+        cap = font(SANS_B, 8)
+        sw = draw.textlength("SPEAKER", font=cap)
+        draw.text((x + int(w * 0.74) - sw / 2, y + int(h * 0.58)), "SPEAKER",
+                  font=cap, fill=NAVY)
+        draw.line([(x + int(w * 0.58), y + int(h * 0.72)),
+                   (x + int(w * 0.63), y + int(h * 0.78)),
+                   (x + int(w * 0.72), y + int(h * 0.64))],
+                  fill=(178, 140, 40), width=2)
+    elif n == 12:  # GTA VI: sunset, skyline, palms, controller, VI
+        sky(draw, x, y, w, h, (48, 32, 88), (200, 90, 130))
+        _stars(draw, x, y, w, int(h * 0.45), 10, 812)
+        # sun disc, top-left
+        draw.ellipse([x + int(w * 0.10) - 8, y + int(h * 0.20) - 8,
+                      x + int(w * 0.10) + 8, y + int(h * 0.20) + 8],
+                     fill=(255, 160, 90))
+        # skyline, bottom, with lit windows
+        for bx, bw, bh in [(0.00, 0.12, 0.22), (0.14, 0.09, 0.30),
+                           (0.25, 0.11, 0.20), (0.38, 0.09, 0.28),
+                           (0.49, 0.11, 0.22), (0.62, 0.09, 0.30),
+                           (0.73, 0.11, 0.20), (0.86, 0.14, 0.26)]:
+            draw.rectangle([x + int(w * bx), y + h - int(h * bh),
+                            x + int(w * (bx + bw)), y + h], fill=(30, 20, 50))
+        _dots(draw, x, y + int(h * 0.72), w, int(h * 0.28), (255, 214, 130),
+              8, 1, 813, fill=0.5)
+        # palms at the edges
+        _palm(draw, x + int(w * 0.06), y + h - 2, 18, (20, 40, 30))
+        _palm(draw, x + int(w * 0.94), y + h - 2, 18, (20, 40, 30))
+        # controller, centre, large
+        draw.ellipse([x + int(w * 0.24), y + int(h * 0.30),
+                      x + int(w * 0.76), y + int(h * 0.92)], fill=(24, 16, 44))
+        draw.ellipse([x + int(w * 0.32), y + int(h * 0.48),
+                      x + int(w * 0.40), y + int(h * 0.62)], fill=(255, 120, 180))
+        draw.ellipse([x + int(w * 0.60), y + int(h * 0.48),
+                      x + int(w * 0.68), y + int(h * 0.62)], fill=(255, 120, 180))
+        draw.line([x + int(w * 0.36), y + int(h * 0.68),
+                   x + int(w * 0.64), y + int(h * 0.68)], fill=(255, 120, 180),
+                  width=2)
+        lab = font(SERIF_B, 20)
         tw = draw.textlength("VI", font=lab)
         draw.text((x + (w - tw) / 2, y + int(h * 0.30)), "VI", font=lab,
                   fill=(255, 214, 130))
-    else:  # 13 Bangladesh: factory + smoke + crowd
+    else:  # 13 Bangladesh: factory, smoke, crowd
         sky(draw, x, y, w, h, (210, 220, 225), (235, 230, 215))
-        draw.rectangle([x, y + int(h * 0.62), x + w, y + h], fill=(150, 140, 120))
-        draw.rectangle([x + int(w * 0.08), y + int(h * 0.40),
+        # factory, left, bigger, with lit windows
+        draw.rectangle([x + int(w * 0.06), y + int(h * 0.38),
                         x + int(w * 0.46), y + int(h * 0.78)], fill=(120, 90, 70))
-        draw.polygon([(x + int(w * 0.08), y + int(h * 0.40)),
-                      (x + int(w * 0.18), y + int(h * 0.28)),
-                      (x + int(w * 0.28), y + int(h * 0.40))], fill=(120, 90, 70))
-        draw.polygon([(x + int(w * 0.28), y + int(h * 0.40)),
-                      (x + int(w * 0.38), y + int(h * 0.28)),
-                      (x + int(w * 0.46), y + int(h * 0.40))], fill=(120, 90, 70))
-        draw.rectangle([x + int(w * 0.52), y + int(h * 0.18),
+        draw.polygon([(x + int(w * 0.06), y + int(h * 0.38)),
+                      (x + int(w * 0.16), y + int(h * 0.24)),
+                      (x + int(w * 0.26), y + int(h * 0.38))], fill=(120, 90, 70))
+        draw.polygon([(x + int(w * 0.26), y + int(h * 0.38)),
+                      (x + int(w * 0.36), y + int(h * 0.24)),
+                      (x + int(w * 0.46), y + int(h * 0.38))], fill=(120, 90, 70))
+        _dots(draw, x + int(w * 0.08), y + int(h * 0.44), int(w * 0.36),
+              int(h * 0.28), (255, 220, 130), 8, 1, 814, fill=0.6)
+        # chimney + smoke
+        draw.rectangle([x + int(w * 0.52), y + int(h * 0.16),
                         x + int(w * 0.58), y + int(h * 0.78)], fill=(90, 80, 70))
-        for cx, cy, r in [(0.55, 0.14, 0.05), (0.58, 0.06, 0.04)]:
-            rx, ry = int(w * r), int(w * r)
-            draw.ellipse([x + int(w * cx) - rx, y + int(h * cy) - ry,
-                          x + int(w * cx) + rx, y + int(h * cy) + ry], fill=(110, 110, 110))
-        for cx in (0.66, 0.74, 0.82, 0.90):
-            draw.ellipse([x + int(w * cx) - 3, y + int(h * 0.70) - 3,
-                          x + int(w * cx) + 3, y + int(h * 0.70) + 3], fill=INK)
-            draw.line([x + int(w * cx), y + int(h * 0.70),
-                       x + int(w * cx), y + int(h * 0.88)], fill=INK, width=2)
+        for fx, fy, pr in [(0.55, 0.16, 5), (0.59, 0.08, 4)]:
+            draw.ellipse([x + int(w * fx) - pr, y + int(h * fy) - pr,
+                          x + int(w * fx) + pr, y + int(h * fy) + pr],
+                         fill=(110, 110, 110))
+        # ground
+        draw.rectangle([x, y + int(h * 0.78), x + w, y + h], fill=(150, 140, 120))
+        # crowd, bottom, across
+        for cx in (0.62, 0.70, 0.78, 0.86, 0.94):
+            _figure(draw, x + int(w * cx), y + h - 1, 16, INK)
+        draw.line([(x + int(w * 0.70), y + int(h * 0.78)),
+                   (x + int(w * 0.76), y + int(h * 0.62))], fill=INK, width=2)
+        # shut chip, top-right
         cap = font(SANS_B, 10)
-        draw.text((x + int(w * 0.62), y + int(h * 0.06)), "55 SHUT",
-                  font=cap, fill=RED)
+        draw.rectangle([x + int(w * 0.62), y + 3, x + int(w * 0.98), y + 17],
+                       fill=(255, 255, 255), outline=RED)
+        draw.text((x + int(w * 0.64), y + 5), "55 SHUT", font=cap, fill=RED)
 
 # ---------------------------------------------------------------- layout
 def main():
@@ -695,6 +911,13 @@ def main():
     count = "40 STORIES \u00b7 7 REGIONS \u00b7 ONE DAY"
     cw = d.textlength(count, font=font(SANS_B, 14))
     d.text((W - MX - cw, 14), count, font=font(SANS_B, 14), fill=GOLD)
+    # red date badge, bottom-right of the masthead (top 1 / top 3 do this)
+    bx0, by0, bx1, by1 = W - MX - 118, 36, W - MX, 92
+    d.rectangle([bx0, by0, bx1, by1], fill=RED, outline=GOLD, width=2)
+    centred(d, (bx0 + bx1) // 2, by0 + 8, "18 NOV", font(SANS_B, 24),
+            (255, 255, 255))
+    centred(d, (bx0 + bx1) // 2, by0 + 36, "WED \u00b7 2026", font(SANS_B, 10),
+            (255, 255, 255))
 
     # ---- region bar ----
     y = 106
