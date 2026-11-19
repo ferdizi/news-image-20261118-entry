@@ -644,16 +644,39 @@ def paint(draw, n, x, y, w, h):
                       (x + int(w * 0.55), y + int(h * 0.82)),
                       (x + w, y + int(h * 0.78)), (x + w, y + h)],
                      fill=(16, 38, 66), outline=WC_INK)
-        # radar dish, left: solid light disc, bold outline, rib lines
-        draw.ellipse([x + int(w * 0.04), y + int(h * 0.38),
-                      x + int(w * 0.34), y + int(h * 0.80)],
-                     fill=(200, 205, 215), outline=WC_INK, width=2)
-        for ly, lx0, lx1 in [(0.50, 0.07, 0.31), (0.59, 0.05, 0.33),
-                             (0.68, 0.07, 0.31)]:
-            draw.line([x + int(w * lx0), y + int(h * ly),
-                       x + int(w * lx1), y + int(h * ly)], fill=WC_INK, width=1)
-        draw.line([x + int(w * 0.19), y + int(h * 0.80),
-                   x + int(w * 0.19), y + h - 2], fill=WC_INK, width=4)
+        # radar dish, left: parabolic bowl (not a full disc), darker steel,
+        # tilted rim, feed arm + dot, tapered pedestal mount
+        _dp0, _dp2, _dc = (0.05, 0.46), (0.27, 0.40), (0.16, 0.82)
+        _dpts = []
+        for _di in range(0, 11):
+            _dt = _di / 10.0
+            _dbx = (1 - _dt) ** 2 * _dp0[0] + 2 * (1 - _dt) * _dt * _dc[0] \
+                + _dt ** 2 * _dp2[0]
+            _dby = (1 - _dt) ** 2 * _dp0[1] + 2 * (1 - _dt) * _dt * _dc[1] \
+                + _dt ** 2 * _dp2[1]
+            _dpts.append((x + int(w * _dbx), y + int(h * _dby)))
+        draw.polygon(_dpts, fill=(96, 116, 142))
+        draw.line(_dpts, fill=WC_INK, width=2)
+        draw.line([_dpts[0], _dpts[-1]], fill=WC_INK, width=2)
+        # rib lines inside the bowl
+        for _r0, _r1 in [((0.09, 0.52), (0.23, 0.48)),
+                         ((0.11, 0.57), (0.21, 0.54))]:
+            draw.line([x + int(w * _r0[0]), y + int(h * _r0[1]),
+                       x + int(w * _r1[0]), y + int(h * _r1[1])],
+                      fill=WC_INK, width=1)
+        # feed arm from bowl centre up to a small feed dot above the rim
+        draw.line([x + int(w * 0.16), y + int(h * 0.60),
+                   x + int(w * 0.22), y + int(h * 0.42)],
+                  fill=WC_INK, width=2)
+        draw.ellipse([x + int(w * 0.22) - 3, y + int(h * 0.42) - 3,
+                      x + int(w * 0.22) + 3, y + int(h * 0.42) + 3],
+                     fill=(255, 214, 130), outline=WC_INK, width=1)
+        # tapered pedestal mount down to the coastline
+        draw.polygon([(x + int(w * 0.135), y + int(h * 0.62)),
+                      (x + int(w * 0.185), y + int(h * 0.62)),
+                      (x + int(w * 0.21), y + h - 2),
+                      (x + int(w * 0.11), y + h - 2)],
+                     fill=(70, 88, 110), outline=WC_INK)
         # drone swarm: red dots + white diamonds, both outlined
         for cx, cy, r in [(0.46, 0.18, 6), (0.54, 0.28, 5), (0.42, 0.30, 4),
                           (0.60, 0.16, 5), (0.66, 0.30, 4), (0.50, 0.42, 4)]:
@@ -810,12 +833,14 @@ def paint(draw, n, x, y, w, h):
             draw.line([x + int(w * dx), y + int(h * 0.10),
                        x + int(w * (dx - 0.03)), y + int(h * 0.30)],
                       fill=(60, 90, 120), width=2)
-        # spiral, centre-left: bold ink rings, filled centre
+        # spiral, centre-left: lighter, thinner rings so it no longer dominates
         cx, cy = x + int(w * 0.36), y + int(h * 0.52)
-        for rr in (0.40, 0.30, 0.20, 0.10):
+        for rr, col, wd in ((0.32, (110, 140, 170), 1),
+                            (0.22, WC_INK, 2),
+                            (0.12, WC_INK, 1)):
             r = int(min(w, h) * rr)
             draw.ellipse([cx - r, cy - r, cx + r, cy + r],
-                         outline=WC_INK, width=3)
+                         outline=col, width=wd)
         draw.ellipse([cx - 4, cy - 4, cx + 4, cy + 4],
                      fill=NAVY, outline=WC_INK, width=1)
         # sea, bottom: flat teal + hatch waves + bold top edge
